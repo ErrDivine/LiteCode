@@ -15,7 +15,7 @@ A minimal one-turn vibe coding CLI that uses a language model (via OpenRouter) w
 ### Prerequisites
 
 - Rust toolchain (version 1.70 or later)
-- An OpenRouter API key (the current implementation has a hardcoded key for demonstration; see [Configuration](#configuration))
+- An OpenRouter API key (set it via `OPENROUTER_API_KEY`; see [Configuration](#configuration))
 
 ### Build from Source
 
@@ -34,6 +34,38 @@ cargo build --release
 ```
 
 ## Usage
+Get an OpenRouter API key from [OpenRouter](https://openrouter.ai/) and set `OPENROUTER_API_KEY` before running LiteCode.
+
+### Option 1: Set for current terminal session
+
+Windows (PowerShell):
+
+```powershell
+$env:OPENROUTER_API_KEY = "your_api_key_here"
+```
+
+macOS (zsh/bash):
+
+```bash
+export OPENROUTER_API_KEY="your_api_key_here"
+```
+
+### Option 2: Set permanently
+
+Windows (PowerShell):
+
+```powershell
+[System.Environment]::SetEnvironmentVariable("OPENROUTER_API_KEY", "your_api_key_here", "User")
+```
+
+After setting it, open a new terminal.
+
+macOS (zsh):
+
+```bash
+echo 'export OPENROUTER_API_KEY="your_api_key_here"' >> ~/.zshrc
+source ~/.zshrc
+```
 
 Run the CLI with your prompt:
 
@@ -60,19 +92,9 @@ The model will:
 
 ## Configuration
 
-Currently, the OpenRouter API key is hardcoded in `src/main.rs`. For production use, you should:
+lite-code reads the API key from the `OPENROUTER_API_KEY` environment variable at runtime.
 
-1. Obtain an API key from [OpenRouter](https://openrouter.ai/)
-2. Modify `src/main.rs` to read the API key from an environment variable (e.g., `OPENROUTER_API_KEY`)
-3. Rebuild the binary
-
-Example modification in `src/main.rs`:
-
-```diff
-- let api_key = String::from("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");
-+ let api_key = std::env::var("OPENROUTER_API_KEY")
-+     .expect("OPENROUTER_API_KEY environment variable not set");
-```
+If this variable is not set, the CLI exits with a clear error message.
 
 ## How It Works
 

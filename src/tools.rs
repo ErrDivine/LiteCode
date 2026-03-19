@@ -1,4 +1,4 @@
-use anyhow::Context;
+use anyhow::{Context, anyhow};
 use serde_json::json;
 use tokio::process::Command;
 
@@ -79,12 +79,39 @@ async fn execute_shell(input: &serde_json::Value) -> ToolResult {
 
     eprintln!("\x1b[36m[shell]\x1b[0m $ {command}");
 
-    let result = Command::new("sh")
-        .arg("-c")
-        .arg(command)
-        .output()
-        .await
-        .context("Failed to spawn shell");
+    // Use platform-native shells so tool execution works across Windows and Unix/macOS.
+    let result = if cfg!(target_os = "windows") {
+        let primary = Command::new("powershell")
+            .arg("-NoProfile")
+            .arg("-Command")
+            .arg(command)
+            .output()
+            .await;
+
+        match primary {
+            Ok(output) => Ok(output),
+            Err(primary_err) => {
+                let fallback = Command::new("cmd")
+                    .arg("/C")
+                    .arg(command)
+                    .output()
+                    .await;
+                match fallback {
+                    Ok(output) => Ok(output),
+                    Err(fallback_err) => Err(anyhow!(
+                        "Failed to spawn shell. powershell: {primary_err}; cmd fallback: {fallback_err}"
+                    )),
+                }
+            }
+        }
+    } else {
+        Command::new("sh")
+            .arg("-c")
+            .arg(command)
+            .output()
+            .await
+            .context("Failed to spawn shell")
+    };
 
     match result {
         Ok(output) => {

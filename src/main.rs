@@ -4,7 +4,7 @@ mod types;
 
 // use std::str::FromStr;
 
-use anyhow::{Result};
+use anyhow::{Context, Result};
 use clap::Parser;
 
 use api::ApiClient;
@@ -12,9 +12,10 @@ use tools::{execute_tool, tool_definitions};
 use types::*;
 
 const SYSTEM_PROMPT: &str = "\
-You are a coding assistant. You have access to tools for running shell commands and writing files. \
-Use these tools to accomplish the user's request. Work step by step, verifying your progress. \
-When you are done, provide a brief summary of what you accomplished.";
+You are a coding assistant operating inside the user's project directory. You have access to tools for running shell commands and writing files. \
+When the task depends on project contents, inspect the workspace first with shell commands and base your answer on real results. \
+Do not claim you cannot access files or run commands when these tools are available. \
+Use tools to accomplish the user's request, work step by step, verify progress, then provide a brief summary.";
 
 #[derive(Parser)]
 #[command(name = "lite-code", about = "Minimal one-turn vibe coding CLI")]
@@ -35,7 +36,8 @@ struct Cli {
 async fn main() -> Result<()> {
     let cli = Cli::parse();
 
-    let api_key = String::from("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");
+    let api_key = std::env::var("OPENROUTER_API_KEY")
+        .context("Missing OPENROUTER_API_KEY environment variable. Set it before running lite-code.")?;
 
     let client = ApiClient::new(api_key);
     let tools = tool_definitions();
