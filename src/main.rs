@@ -10,6 +10,7 @@ use clap::Parser;
 use api::ApiClient;
 use tools::{execute_tool, tool_definitions};
 use types::*;
+use std::io;
 
 const SYSTEM_PROMPT: &str = "\
 You are a coding assistant operating inside the user's project directory. You have access to tools for running shell commands and writing files. \
@@ -37,17 +38,36 @@ async fn main() -> Result<()> {
     let cli = Cli::parse();
 
     let api_key = std::env::var("OPENROUTER_API_KEY")
-        .context("Missing OPENROUTER_API_KEY environment variable. Set it before running lite-code.")?;
+                                    .expect("OPENROUTER_API_KEY environment variable not set");
 
     let client = ApiClient::new(api_key);
     let tools = tool_definitions();
 
     let mut messages: Vec<Message> = vec![
         Message::system(SYSTEM_PROMPT),
-        Message::user(&cli.prompt),
     ];
 
+    let mut user_stdin_input:String = String::new();
+    let mut tool_loop_flag:bool = false;
+
     loop {
+        if !tool_loop_flag {
+            // Before execution, read user prompt for this turn.
+            user_stdin_input.clear();
+            io::stdin()
+                .read_line(&mut user_stdin_input)
+                .expect("Failed to read from stdin.");
+            user_stdin_input = String::from(user_stdin_input.trim());
+
+            // Naive exiting for the present.
+            if user_stdin_input == "exit" {
+                break;
+            }
+
+            // Append user prompt to message list.
+            messages.push(Message::user(&user_stdin_input));
+        }
+
         let request = ChatRequest {
             model: cli.model.clone(),
             max_tokens: cli.max_tokens,
@@ -69,12 +89,14 @@ async fn main() -> Result<()> {
 
         // Done when model has no tool calls or explicitly stopped
         if tool_calls.is_none() || finish_reason.as_deref() == Some("stop") {
+            tool_loop_flag = false;
             println!();
-            break;
+            continue;
         }
 
         // Execute each tool call and append results
         if let Some(calls) = tool_calls {
+            tool_loop_flag = true;
             for tc in &calls {
                 let input: serde_json::Value = serde_json::from_str(&tc.function.arguments)
                     .unwrap_or(serde_json::Value::Object(serde_json::Map::new()));
@@ -88,3 +110,4 @@ async fn main() -> Result<()> {
 
     Ok(())
 }
+
