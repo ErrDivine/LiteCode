@@ -4,7 +4,7 @@ mod types;
 
 // use std::str::FromStr;
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use clap::Parser;
 
 use api::ApiClient;
@@ -13,8 +13,13 @@ use types::*;
 use std::io;
 
 const SYSTEM_PROMPT: &str = "\
-You are a coding assistant operating inside the user's project directory. You have access to tools for running shell commands and writing files. \
-When the task depends on project contents, inspect the workspace first with shell commands and base your answer on real results. \
+You are a coding assistant operating inside the user's project directory. \
+You have access to tools for running shell commands, reading and writing files, \
+editing files, listing directories, and searching code. \
+When the task depends on project contents, use read_file, list_directory, or search_files \
+to inspect the workspace and base your answer on real results. \
+Prefer edit_file for targeted changes instead of rewriting entire files with write_file. \
+Use find_files to locate files by glob pattern (e.g. **/*.rs). \
 Do not claim you cannot access files or run commands when these tools are available. \
 Use tools to accomplish the user's request, work step by step, verify progress, then provide a brief summary.";
 
