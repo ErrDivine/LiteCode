@@ -1,10 +1,11 @@
 use anyhow::{Context, anyhow};
+use async_trait::async_trait;
+use protocol::DynamicToolSpec;
 use regex::Regex;
 use serde_json::json;
+use session_kernel::{ToolExecutionResult, ToolExecutor};
 use std::path::{Path, PathBuf};
 use tokio::process::Command;
-
-use crate::types::{FunctionDef, ToolDefinition};
 
 const MAX_OUTPUT_LEN: usize = 10_000;
 const MAX_SEARCH_MATCHES: usize = 100;
@@ -28,6 +29,19 @@ pub struct ToolResult {
     pub output: String,
 }
 
+#[derive(Clone, Default)]
+pub struct LocalToolExecutor;
+
+#[async_trait]
+impl ToolExecutor for LocalToolExecutor {
+    async fn execute_tool(&self, name: &str, input: &serde_json::Value) -> ToolExecutionResult {
+        let result = execute_tool(name, input).await;
+        ToolExecutionResult {
+            output: result.output,
+        }
+    }
+}
+
 fn truncate_output(mut output: String) -> String {
     if output.len() > MAX_OUTPUT_LEN {
         output.truncate(MAX_OUTPUT_LEN);
@@ -46,188 +60,158 @@ fn parse_usize_param(input: &serde_json::Value, key: &str) -> Option<usize> {
 }
 
 fn parse_bool_param(input: &serde_json::Value, key: &str) -> Option<bool> {
-    input.get(key).and_then(|v| {
-        v.as_bool()
-            .or_else(|| v.as_str().map(|s| s == "true"))
-    })
+    input
+        .get(key)
+        .and_then(|v| v.as_bool().or_else(|| v.as_str().map(|s| s == "true")))
 }
 
 // ─── Tool Definitions ───────────────────────────────────────────────────────
 
-pub fn tool_definitions() -> Vec<ToolDefinition> {
+pub fn tool_definitions() -> Vec<DynamicToolSpec> {
     vec![
-        ToolDefinition {
-            r#type: "function".into(),
-            function: FunctionDef {
-                name: "shell".into(),
-                description: "Run a shell command and return its output (stdout and stderr \
-                               combined). The command runs in the current working directory."
-                    .into(),
-                parameters: json!({
-                    "type": "object",
-                    "properties": {
-                        "command": {
-                            "type": "string",
-                            "description": "The shell command to execute"
-                        }
+        tool(
+            "shell",
+            "Run a shell command and return its output (stdout and stderr combined). The command runs in the current working directory.",
+            json!({
+                "type": "object",
+                "properties": {
+                    "command": {
+                        "type": "string",
+                        "description": "The shell command to execute"
+                    }
+                },
+                "required": ["command"]
+            }),
+        ),
+        tool(
+            "write_file",
+            "Write content to a file at the given path. Creates parent directories if needed. Overwrites existing files.",
+            json!({
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "File path to write to"
                     },
-                    "required": ["command"]
-                }),
-            },
-        },
-        ToolDefinition {
-            r#type: "function".into(),
-            function: FunctionDef {
-                name: "write_file".into(),
-                description: "Write content to a file at the given path. Creates parent \
-                               directories if needed. Overwrites existing files."
-                    .into(),
-                parameters: json!({
-                    "type": "object",
-                    "properties": {
-                        "path": {
-                            "type": "string",
-                            "description": "File path to write to"
-                        },
-                        "content": {
-                            "type": "string",
-                            "description": "Content to write to the file"
-                        }
+                    "content": {
+                        "type": "string",
+                        "description": "Content to write to the file"
+                    }
+                },
+                "required": ["path", "content"]
+            }),
+        ),
+        tool(
+            "read_file",
+            "Read a file and return its contents with line numbers. Use offset and limit to read a specific range of lines.",
+            json!({
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "File path to read"
                     },
-                    "required": ["path", "content"]
-                }),
-            },
-        },
-        ToolDefinition {
-            r#type: "function".into(),
-            function: FunctionDef {
-                name: "read_file".into(),
-                description: "Read a file and return its contents with line numbers. \
-                               Use offset and limit to read a specific range of lines."
-                    .into(),
-                parameters: json!({
-                    "type": "object",
-                    "properties": {
-                        "path": {
-                            "type": "string",
-                            "description": "File path to read"
-                        },
-                        "offset": {
-                            "type": "integer",
-                            "description": "Line number to start reading from (1-based). Defaults to 1."
-                        },
-                        "limit": {
-                            "type": "integer",
-                            "description": "Maximum number of lines to read. Defaults to the entire file."
-                        }
+                    "offset": {
+                        "type": "integer",
+                        "description": "Line number to start reading from (1-based). Defaults to 1."
                     },
-                    "required": ["path"]
-                }),
-            },
-        },
-        ToolDefinition {
-            r#type: "function".into(),
-            function: FunctionDef {
-                name: "edit_file".into(),
-                description: "Edit a file by replacing an exact string match with new content. \
-                               The old_string must match exactly one location in the file. \
-                               Include surrounding context lines in old_string to ensure uniqueness."
-                    .into(),
-                parameters: json!({
-                    "type": "object",
-                    "properties": {
-                        "path": {
-                            "type": "string",
-                            "description": "File path to edit"
-                        },
-                        "old_string": {
-                            "type": "string",
-                            "description": "The exact string to find (must match exactly once)"
-                        },
-                        "new_string": {
-                            "type": "string",
-                            "description": "The replacement string"
-                        }
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum number of lines to read. Defaults to the entire file."
+                    }
+                },
+                "required": ["path"]
+            }),
+        ),
+        tool(
+            "edit_file",
+            "Edit a file by replacing an exact string match with new content. The old_string must match exactly one location in the file. Include surrounding context lines in old_string to ensure uniqueness.",
+            json!({
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "File path to edit"
                     },
-                    "required": ["path", "old_string", "new_string"]
-                }),
-            },
-        },
-        ToolDefinition {
-            r#type: "function".into(),
-            function: FunctionDef {
-                name: "list_directory".into(),
-                description: "List files and directories at the given path. \
-                               Directories are shown with a trailing /."
-                    .into(),
-                parameters: json!({
-                    "type": "object",
-                    "properties": {
-                        "path": {
-                            "type": "string",
-                            "description": "Directory path to list. Defaults to the current directory."
-                        }
+                    "old_string": {
+                        "type": "string",
+                        "description": "The exact string to find (must match exactly once)"
                     },
-                    "required": []
-                }),
-            },
-        },
-        ToolDefinition {
-            r#type: "function".into(),
-            function: FunctionDef {
-                name: "search_files".into(),
-                description: "Search for a text pattern in files recursively. Returns matching \
-                               lines with file paths and line numbers (grep-style). Skips binary \
-                               files and common non-source directories."
-                    .into(),
-                parameters: json!({
-                    "type": "object",
-                    "properties": {
-                        "pattern": {
-                            "type": "string",
-                            "description": "Text or regex pattern to search for"
-                        },
-                        "path": {
-                            "type": "string",
-                            "description": "Directory to search in. Defaults to current directory."
-                        },
-                        "regex": {
-                            "type": "boolean",
-                            "description": "Treat pattern as a regex. Defaults to false (literal match)."
-                        },
-                        "include": {
-                            "type": "string",
-                            "description": "Glob pattern to filter files (e.g. '*.rs', '*.py')"
-                        }
+                    "new_string": {
+                        "type": "string",
+                        "description": "The replacement string"
+                    }
+                },
+                "required": ["path", "old_string", "new_string"]
+            }),
+        ),
+        tool(
+            "list_directory",
+            "List files and directories at the given path. Directories are shown with a trailing /.",
+            json!({
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "Directory path to list. Defaults to the current directory."
+                    }
+                },
+                "required": []
+            }),
+        ),
+        tool(
+            "search_files",
+            "Search for a text pattern in files recursively. Returns matching lines with file paths and line numbers (grep-style). Skips binary files and common non-source directories.",
+            json!({
+                "type": "object",
+                "properties": {
+                    "pattern": {
+                        "type": "string",
+                        "description": "Text or regex pattern to search for"
                     },
-                    "required": ["pattern"]
-                }),
-            },
-        },
-        ToolDefinition {
-            r#type: "function".into(),
-            function: FunctionDef {
-                name: "find_files".into(),
-                description: "Find files matching a glob pattern. Use **/*.rs for recursive \
-                               matching or *.rs for current directory only."
-                    .into(),
-                parameters: json!({
-                    "type": "object",
-                    "properties": {
-                        "pattern": {
-                            "type": "string",
-                            "description": "Glob pattern to match (e.g. '**/*.rs', 'src/**/*.py', 'Cargo.*')"
-                        },
-                        "path": {
-                            "type": "string",
-                            "description": "Base directory to search from. Defaults to current directory."
-                        }
+                    "path": {
+                        "type": "string",
+                        "description": "Directory to search in. Defaults to current directory."
                     },
-                    "required": ["pattern"]
-                }),
-            },
-        },
+                    "regex": {
+                        "type": "boolean",
+                        "description": "Treat pattern as a regex. Defaults to false (literal match)."
+                    },
+                    "include": {
+                        "type": "string",
+                        "description": "Glob pattern to filter files (e.g. '*.rs', '*.py')"
+                    }
+                },
+                "required": ["pattern"]
+            }),
+        ),
+        tool(
+            "find_files",
+            "Find files matching a glob pattern. Use **/*.rs for recursive matching or *.rs for current directory only.",
+            json!({
+                "type": "object",
+                "properties": {
+                    "pattern": {
+                        "type": "string",
+                        "description": "Glob pattern to match (e.g. '**/*.rs', 'src/**/*.py', 'Cargo.*')"
+                    },
+                    "path": {
+                        "type": "string",
+                        "description": "Base directory to search from. Defaults to current directory."
+                    }
+                },
+                "required": ["pattern"]
+            }),
+        ),
     ]
+}
+
+fn tool(name: &str, description: &str, parameters: serde_json::Value) -> DynamicToolSpec {
+    DynamicToolSpec {
+        name: name.to_string(),
+        description: description.to_string(),
+        parameters,
+    }
 }
 
 // ─── Tool Dispatch ──────────────────────────────────────────────────────────
@@ -255,7 +239,7 @@ async fn execute_shell(input: &serde_json::Value) -> ToolResult {
         None => {
             return ToolResult {
                 output: "Missing 'command' parameter".into(),
-            }
+            };
         }
     };
 
@@ -272,11 +256,7 @@ async fn execute_shell(input: &serde_json::Value) -> ToolResult {
         match primary {
             Ok(output) => Ok(output),
             Err(primary_err) => {
-                let fallback = Command::new("cmd")
-                    .arg("/C")
-                    .arg(command)
-                    .output()
-                    .await;
+                let fallback = Command::new("cmd").arg("/C").arg(command).output().await;
                 match fallback {
                     Ok(output) => Ok(output),
                     Err(fallback_err) => Err(anyhow!(
@@ -325,7 +305,7 @@ fn execute_write_file(input: &serde_json::Value) -> ToolResult {
         None => {
             return ToolResult {
                 output: "Missing 'path' parameter".into(),
-            }
+            };
         }
     };
     let content = match input.get("content").and_then(|v| v.as_str()) {
@@ -333,7 +313,7 @@ fn execute_write_file(input: &serde_json::Value) -> ToolResult {
         None => {
             return ToolResult {
                 output: "Missing 'content' parameter".into(),
-            }
+            };
         }
     };
 
@@ -366,7 +346,7 @@ fn execute_read_file(input: &serde_json::Value) -> ToolResult {
         None => {
             return ToolResult {
                 output: "Missing 'path' parameter".into(),
-            }
+            };
         }
     };
 
@@ -397,7 +377,7 @@ fn execute_read_file(input: &serde_json::Value) -> ToolResult {
                 Err(_) => {
                     return ToolResult {
                         output: "File is not valid UTF-8 (possibly binary)".into(),
-                    }
+                    };
                 }
             };
 
@@ -412,7 +392,9 @@ fn execute_read_file(input: &serde_json::Value) -> ToolResult {
 
             if offset > total_lines {
                 return ToolResult {
-                    output: format!("File has only {total_lines} lines (requested offset {offset})"),
+                    output: format!(
+                        "File has only {total_lines} lines (requested offset {offset})"
+                    ),
                 };
             }
 
@@ -447,7 +429,7 @@ fn execute_edit_file(input: &serde_json::Value) -> ToolResult {
         None => {
             return ToolResult {
                 output: "Missing 'path' parameter".into(),
-            }
+            };
         }
     };
     let old_string = match input.get("old_string").and_then(|v| v.as_str()) {
@@ -455,7 +437,7 @@ fn execute_edit_file(input: &serde_json::Value) -> ToolResult {
         None => {
             return ToolResult {
                 output: "Missing 'old_string' parameter".into(),
-            }
+            };
         }
     };
     let new_string = match input.get("new_string").and_then(|v| v.as_str()) {
@@ -463,7 +445,7 @@ fn execute_edit_file(input: &serde_json::Value) -> ToolResult {
         None => {
             return ToolResult {
                 output: "Missing 'new_string' parameter".into(),
-            }
+            };
         }
     };
 
@@ -486,7 +468,7 @@ fn execute_edit_file(input: &serde_json::Value) -> ToolResult {
         Err(e) => {
             return ToolResult {
                 output: format!("Failed to read file: {e}"),
-            }
+            };
         }
     };
 
@@ -523,10 +505,7 @@ fn execute_edit_file(input: &serde_json::Value) -> ToolResult {
 // ─── list_directory ─────────────────────────────────────────────────────────
 
 fn execute_list_directory(input: &serde_json::Value) -> ToolResult {
-    let path = input
-        .get("path")
-        .and_then(|v| v.as_str())
-        .unwrap_or(".");
+    let path = input.get("path").and_then(|v| v.as_str()).unwrap_or(".");
 
     eprintln!("\x1b[36m[list_directory]\x1b[0m {path}");
 
@@ -547,7 +526,7 @@ fn execute_list_directory(input: &serde_json::Value) -> ToolResult {
         Err(e) => {
             return ToolResult {
                 output: format!("Failed to read directory: {e}"),
-            }
+            };
         }
     };
 
@@ -585,7 +564,7 @@ fn execute_search_files(input: &serde_json::Value) -> ToolResult {
         None => {
             return ToolResult {
                 output: "Missing 'pattern' parameter".into(),
-            }
+            };
         }
     };
 
@@ -595,10 +574,7 @@ fn execute_search_files(input: &serde_json::Value) -> ToolResult {
         };
     }
 
-    let search_path = input
-        .get("path")
-        .and_then(|v| v.as_str())
-        .unwrap_or(".");
+    let search_path = input.get("path").and_then(|v| v.as_str()).unwrap_or(".");
     let use_regex = parse_bool_param(input, "regex").unwrap_or(false);
     let include_glob = input.get("include").and_then(|v| v.as_str());
 
@@ -614,7 +590,7 @@ fn execute_search_files(input: &serde_json::Value) -> ToolResult {
             Err(e) => {
                 return ToolResult {
                     output: format!("Invalid regex pattern: {e}"),
-                }
+                };
             }
         }
     } else {
@@ -628,7 +604,7 @@ fn execute_search_files(input: &serde_json::Value) -> ToolResult {
             Err(e) => {
                 return ToolResult {
                     output: format!("Invalid include glob pattern: {e}"),
-                }
+                };
             }
         }
     } else {
@@ -732,14 +708,11 @@ fn execute_find_files(input: &serde_json::Value) -> ToolResult {
         None => {
             return ToolResult {
                 output: "Missing 'pattern' parameter".into(),
-            }
+            };
         }
     };
 
-    let base_path = input
-        .get("path")
-        .and_then(|v| v.as_str())
-        .unwrap_or(".");
+    let base_path = input.get("path").and_then(|v| v.as_str()).unwrap_or(".");
 
     eprintln!("\x1b[36m[find_files]\x1b[0m pattern=\"{pattern}\" path={base_path}");
 
@@ -751,7 +724,7 @@ fn execute_find_files(input: &serde_json::Value) -> ToolResult {
         Err(e) => {
             return ToolResult {
                 output: format!("Invalid glob pattern: {e}"),
-            }
+            };
         }
     };
 

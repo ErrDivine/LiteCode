@@ -1,18 +1,17 @@
-mod api;
 mod tools;
-mod types;
+mod web;
 
-// use std::str::FromStr;
-
-use anyhow::Result;
+use anyhow::{Context, Result};
 use clap::Parser;
+use std::io::{self, Write};
+use std::sync::Arc;
 
-use api::ApiClient;
-use tools::{execute_tool, tool_definitions};
-use types::*;
-use std::io;
+use scheduler::OpenAiScheduler;
+use session_kernel::{SessionConfig, ThreadManager};
+use tools::{LocalToolExecutor, tool_definitions};
+use ui_bridge::{CliEvent, event_to_cli, user_text_op};
 
-const SYSTEM_PROMPT: &str = "\
+pub(crate) const SYSTEM_PROMPT: &str = "\
 You are a coding assistant operating inside the user's project directory. \
 You have access to tools for running shell commands, reading and writing files, \
 editing files, listing directories, and searching code. \
@@ -24,10 +23,11 @@ Do not claim you cannot access files or run commands when these tools are availa
 Use tools to accomplish the user's request, work step by step, verify progress, then provide a brief summary.";
 
 #[derive(Parser)]
-#[command(name = "lite-code", about = "Minimal one-turn vibe coding CLI")]
+#[command(name = "lite-code", about = "Minimal vibe coding agent")]
 struct Cli {
-    /// The prompt to send to the LLM
-    prompt: String,
+    /// Launch the web UI instead of CLI mode
+    #[arg(long)]
+    web: bool,
 
     /// Model to use
     #[arg(short, long, default_value = "nvidia/nemotron-3-super-120b-a12b:free")]
@@ -43,76 +43,82 @@ async fn main() -> Result<()> {
     let cli = Cli::parse();
 
     let api_key = std::env::var("OPENROUTER_API_KEY")
-                                    .expect("OPENROUTER_API_KEY environment variable not set");
+        .context("OPENROUTER_API_KEY environment variable not set")?;
 
-    let client = ApiClient::new(api_key);
+    let scheduler = Arc::new(OpenAiScheduler::openrouter(api_key)?);
+    let tool_executor = Arc::new(LocalToolExecutor);
+    let history_root = std::env::current_dir()?.join(".lite-code");
+    let manager = Arc::new(ThreadManager::new(
+        scheduler,
+        tool_executor,
+        history_root.clone(),
+    ));
+
+    if cli.web {
+        let state = Arc::new(web::AppState {
+            manager,
+            history_root,
+            model: cli.model,
+            max_tokens: cli.max_tokens,
+        });
+        return web::serve(state).await;
+    }
+
+    // --- CLI mode ---
     let tools = tool_definitions();
-
-    let mut messages: Vec<Message> = vec![
-        Message::system(SYSTEM_PROMPT),
-    ];
-
-    let mut user_stdin_input:String = String::new();
-    let mut tool_loop_flag:bool = false;
+    let thread = manager
+        .start_thread_with_tools(runtime_config(&cli, history_root), tools, true)
+        .await?
+        .thread;
+    let _ = thread.next_event().await?;
+    let mut user_stdin_input: String = String::new();
 
     loop {
-        if !tool_loop_flag {
-            // Before execution, read user prompt for this turn.
-            user_stdin_input.clear();
-            io::stdin()
-                .read_line(&mut user_stdin_input)
-                .expect("Failed to read from stdin.");
-            user_stdin_input = String::from(user_stdin_input.trim());
+        user_stdin_input.clear();
+        io::stdin()
+            .read_line(&mut user_stdin_input)
+            .expect("Failed to read from stdin.");
+        user_stdin_input = String::from(user_stdin_input.trim());
 
-            // Naive exiting for the present.
-            if user_stdin_input == "exit" {
-                break;
-            }
-
-            // Append user prompt to message list.
-            messages.push(Message::user(&user_stdin_input));
+        if user_stdin_input == "exit" {
+            break;
         }
 
-        let request = ChatRequest {
-            model: cli.model.clone(),
-            max_tokens: cli.max_tokens,
-            messages: messages.clone(),
-            tools: tools.clone(),
-            stream: true,
-        };
+        thread.submit(user_text_op(&user_stdin_input)).await?;
 
-        let (content, tool_calls, finish_reason) = client.send_message(&request).await?;
-
-        // Append assistant turn to conversation
-        messages.push(Message {
-            role: Role::Assistant,
-            content,
-            tool_calls: tool_calls.clone(),
-            tool_call_id: None,
-            name: None,
-        });
-
-        // Done when model has no tool calls or explicitly stopped
-        if tool_calls.is_none() || finish_reason.as_deref() == Some("stop") {
-            tool_loop_flag = false;
-            println!();
-            continue;
-        }
-
-        // Execute each tool call and append results
-        if let Some(calls) = tool_calls {
-            tool_loop_flag = true;
-            for tc in &calls {
-                let input: serde_json::Value = serde_json::from_str(&tc.function.arguments)
-                    .unwrap_or(serde_json::Value::Object(serde_json::Map::new()));
-                let result = execute_tool(&tc.function.name, &input).await;
-                messages.push(Message::tool_result(&tc.id, result.output));
+        loop {
+            match event_to_cli(&thread.next_event().await?) {
+                CliEvent::Print(text) => {
+                    print!("{text}");
+                    io::stdout().flush().ok();
+                }
+                CliEvent::ToolStart { name, arguments } => {
+                    eprintln!("\n[tool] {name} {arguments}");
+                }
+                CliEvent::ToolEnd { name, output } => {
+                    eprintln!("[tool] {name} done\n{output}");
+                }
+                CliEvent::Error(error) => {
+                    eprintln!("\n{error}");
+                    break;
+                }
+                CliEvent::Done => break,
+                CliEvent::Ignore => {}
             }
         }
-
         println!();
     }
 
     Ok(())
 }
 
+fn runtime_config(cli: &Cli, history_root: std::path::PathBuf) -> SessionConfig {
+    let mut config = SessionConfig::new(
+        cli.model.clone(),
+        std::env::current_dir().unwrap_or_else(|_| ".".into()),
+    );
+    config.system_prompt = SYSTEM_PROMPT.to_string();
+    config.max_tokens = cli.max_tokens;
+    config.history_root = history_root;
+    config
+}

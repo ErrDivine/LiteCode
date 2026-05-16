@@ -1,0 +1,10 @@
+[package]
+name = "protocol"
+version = "0.1.0"
+edition = "2024"
+description = "Neutral runtime protocol types for lite-code"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }

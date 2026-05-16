@@ -1,0 +1,15 @@
+[package]
+name = "rollout"
+version = "0.1.0"
+edition = "2024"
+description = "JSONL rollout persistence for lite-code sessions"
+
+[dependencies]
+anyhow = "1"
+protocol = { path = "../protocol" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
