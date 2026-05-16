@@ -1,0 +1,14 @@
+[package]
+name = "state-store"
+version = "0.1.0"
+edition = "2024"
+description = "Local state metadata runtime for lite-code"
+
+[dependencies]
+protocol = { path = "../protocol" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }

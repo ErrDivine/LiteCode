@@ -1,0 +1,17 @@
+[package]
+name = "thread-store"
+version = "0.1.0"
+edition = "2024"
+description = "Storage-neutral thread persistence boundary for lite-code"
+
+[dependencies]
+anyhow = "1"
+async-trait = { workspace = true }
+protocol = { path = "../protocol" }
+rollout = { path = "../rollout" }
+serde = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }

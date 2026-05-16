@@ -1,0 +1,21 @@
+[package]
+name = "openai-rs"
+version = "0.1.0"
+edition = "2024"
+description = "Reusable Rust crate for OpenAI-compatible LLM API connections"
+
+[lib]
+name = "openai_rs"
+
+[dependencies]
+reqwest = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+http = { workspace = true }
+bytes = { workspace = true }
+futures = { workspace = true }
+async-trait = { workspace = true }
+eventsource-stream = { workspace = true }
+rand = { workspace = true }
