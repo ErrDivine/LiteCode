@@ -830,6 +830,7 @@ dependencies = [
  "serde",
  "serde_json",
  "session-kernel",
+ "status",
  "tokio",
  "tokio-stream",
  "tower-http",
@@ -1493,6 +1494,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "status"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror",
+]
+
+[[package]]
 name = "strsim"
 version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1764,6 +1775,7 @@ dependencies = [
  "protocol",
  "serde",
  "serde_json",
+ "status",
 ]
 
 [[package]]

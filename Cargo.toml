@@ -8,6 +8,7 @@ members = [
   "crates/state-store",
   "crates/session-kernel",
   "crates/scheduler",
+  "crates/status",
   "crates/ui-bridge",
 ]
 resolver = "3"
@@ -47,4 +48,5 @@ async-trait = { workspace = true }
 protocol = { path = "crates/protocol" }
 session-kernel = { path = "crates/session-kernel" }
 scheduler = { path = "crates/scheduler" }
+status = { path = "crates/status" }
 ui-bridge = { path = "crates/ui-bridge" }

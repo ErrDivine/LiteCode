@@ -1,0 +1,273 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Architecture - lite-code / Marvis Runtime Design</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="../highlight.css">
+        <link rel="stylesheet" href="../tomorrow-night.css">
+        <link rel="stylesheet" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+        <link rel="stylesheet" href="../theme/custom.css">
+
+
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "../";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="../toc.js"></script>
+    </head>
+    <body>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="../toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">lite-code / Marvis Runtime Design</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="architecture"><a class="header" href="#architecture">Architecture</a></h1>
+<p>The workspace uses a layered runtime architecture. The top layer is product-specific. The middle layer is runtime orchestration. The lower layers are protocol, transport, status, and persistence support.</p>
+<h2 id="layer-map"><a class="header" href="#layer-map">Layer Map</a></h2>
+<pre><code class="language-text">VSCode extension
+  -&gt; ui-bridge JSON request/response types
+  -&gt; src/vscode.rs stdio server
+  -&gt; status crate context capsule
+  -&gt; session-kernel thread
+  -&gt; scheduler model/tool turn
+  -&gt; openai-rs client
+  -&gt; local tools
+  -&gt; rollout history
+</code></pre>
+<p>The CLI and web surfaces enter lower in the stack:</p>
+<pre><code class="language-text">CLI stdin/stdout -&gt; session-kernel -&gt; scheduler -&gt; tools -&gt; rollout
+Web HTTP/SSE    -&gt; session-kernel -&gt; scheduler -&gt; tools -&gt; rollout
+</code></pre>
+<h2 id="workspace-crate-dependencies"><a class="header" href="#workspace-crate-dependencies">Workspace Crate Dependencies</a></h2>
+<p>The important dependency direction is one-way:</p>
+<div class="table-wrapper"><table><thead><tr><th>Crate</th><th>Depends on</th><th>Design note</th></tr></thead><tbody>
+<tr><td><code>protocol</code></td><td><code>serde</code>, <code>serde_json</code>, <code>thiserror</code></td><td>Lowest shared vocabulary. No runtime ownership.</td></tr>
+<tr><td><code>openai-rs</code></td><td>HTTP, SSE, serde, retry dependencies</td><td>Reusable API client. No knowledge of Marvis thread state.</td></tr>
+<tr><td><code>rollout</code></td><td><code>protocol</code>, <code>tokio</code>, <code>serde_json</code></td><td>JSONL persistence of protocol records.</td></tr>
+<tr><td><code>thread-store</code></td><td><code>protocol</code>, <code>rollout</code></td><td>Store abstraction over rollout persistence.</td></tr>
+<tr><td><code>state-store</code></td><td><code>protocol</code>, <code>tokio</code>, <code>serde_json</code></td><td>Local metadata/log appenders.</td></tr>
+<tr><td><code>session-kernel</code></td><td><code>protocol</code>, <code>rollout</code>, <code>thread-store</code></td><td>Runtime core. Depends on traits for scheduler and tools.</td></tr>
+<tr><td><code>scheduler</code></td><td><code>session-kernel</code>, <code>protocol</code>, <code>openai-rs</code></td><td>Implements <code>session-kernel::Scheduler</code>.</td></tr>
+<tr><td><code>status</code></td><td><code>serde</code>, git subprocesses</td><td>Deterministic workspace status model. Independent from scheduler.</td></tr>
+<tr><td><code>ui-bridge</code></td><td><code>protocol</code>, <code>status</code></td><td>Surface-specific event/request shapes.</td></tr>
+<tr><td><code>lite-code</code> binary</td><td>all relevant crates</td><td>Composition root.</td></tr>
+</tbody></table>
+</div>
+<h2 id="composition-root"><a class="header" href="#composition-root">Composition Root</a></h2>
+<p><code>src/main.rs</code> composes:</p>
+<ul>
+<li><code>OpenAiScheduler::openrouter(api_key)</code> as the model scheduler.</li>
+<li><code>LocalToolExecutor</code> as the tool executor.</li>
+<li><code>ThreadManager::new(...)</code> as the thread runtime.</li>
+<li><code>tool_definitions()</code> as the dynamic tool surface.</li>
+<li><code>SessionConfig</code> as the per-thread runtime configuration.</li>
+</ul>
+<p><code>src/vscode.rs</code> composes the same pieces, but selects <code>SyntheticScheduler</code> when <code>OPENROUTER_API_KEY</code> is missing. That fallback allows VSCode status collection and bridge testing without a live model.</p>
+<h2 id="runtime-boundaries"><a class="header" href="#runtime-boundaries">Runtime Boundaries</a></h2>
+<h3 id="protocol-boundary"><a class="header" href="#protocol-boundary">Protocol Boundary</a></h3>
+<p>The protocol crate is the serialization boundary. Anything sent across process boundaries or written to rollout JSONL should be expressible as protocol types. This keeps UI shells and persistence from depending on internal scheduler structs.</p>
+<h3 id="kernel-boundary"><a class="header" href="#kernel-boundary">Kernel Boundary</a></h3>
+<p>The kernel is responsible for turn lifecycle, not model policy. It receives an <code>Op</code>, emits lifecycle events, persists user and assistant <code>ResponseItem</code>s, and delegates model execution to a <code>Scheduler</code>.</p>
+<h3 id="scheduler-boundary"><a class="header" href="#scheduler-boundary">Scheduler Boundary</a></h3>
+<p>The scheduler is responsible for mapping a <code>TurnRequest</code> into model calls and tool calls. It sees history, dynamic tools, the tool executor, and a cancellation flag. It returns <code>SchedulerOutput</code>.</p>
+<h3 id="tool-boundary"><a class="header" href="#tool-boundary">Tool Boundary</a></h3>
+<p>The kernel only knows the <code>ToolExecutor</code> trait. The current implementation is <code>LocalToolExecutor</code> in the binary crate. Moving this into a dedicated crate would let policy, tracing, and permissions evolve without changing the kernel.</p>
+<h3 id="status-boundary"><a class="header" href="#status-boundary">Status Boundary</a></h3>
+<p>The status crate produces deterministic summaries and context capsules. The model receives that capsule as text through the normal user-input path. This keeps context construction testable and prevents VSCode-specific types from leaking into the scheduler.</p>
+<h2 id="event-model"><a class="header" href="#event-model">Event Model</a></h2>
+<p>The kernel emits <code>protocol::Event</code> values. Each event has:</p>
+<ul>
+<li><code>id</code>: the submission id.</li>
+<li><code>msg</code>: an <code>EventMsg</code> variant.</li>
+</ul>
+<p>Surface adapters map these events:</p>
+<ul>
+<li>CLI prints deltas and tool logs.</li>
+<li>Web converts selected events into SSE names and JSON payloads.</li>
+<li>VSCode converts selected events into <code>VscodeRuntimeEvent</code>.</li>
+</ul>
+<p>This design makes the kernel unaware of UI presentation while preserving a single runtime event stream.</p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../design/overview.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="../design/flows.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../design/overview.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="../design/flows.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="../elasticlunr.min.js"></script>
+        <script src="../mark.min.js"></script>
+        <script src="../searcher.js"></script>
+
+        <script src="../clipboard.min.js"></script>
+        <script src="../highlight.js"></script>
+        <script src="../book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+    </div>
+    </body>
+</html>

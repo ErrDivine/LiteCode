@@ -1,0 +1,372 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Interface Reference - lite-code / Marvis Runtime Design</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="../highlight.css">
+        <link rel="stylesheet" href="../tomorrow-night.css">
+        <link rel="stylesheet" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+        <link rel="stylesheet" href="../theme/custom.css">
+
+
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "../";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="../toc.js"></script>
+    </head>
+    <body>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="../toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">lite-code / Marvis Runtime Design</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="interface-reference"><a class="header" href="#interface-reference">Interface Reference</a></h1>
+<p>This page is a compact lookup for public interfaces across the workspace.</p>
+<h2 id="protocol-interfaces"><a class="header" href="#protocol-interfaces">Protocol Interfaces</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Interface</th><th>Kind</th><th>Purpose</th></tr></thead><tbody>
+<tr><td><code>ThreadId</code></td><td>struct</td><td>Typed thread identifier with generation, parsing, display, and serde.</td></tr>
+<tr><td><code>W3cTraceContext</code></td><td>struct</td><td>Optional traceparent/tracestate metadata.</td></tr>
+<tr><td><code>Submission</code></td><td>struct</td><td>Submission id, operation, and optional trace.</td></tr>
+<tr><td><code>Op</code></td><td>enum</td><td>Runtime operations: interrupt, user input, user turn, injection, synthetic.</td></tr>
+<tr><td><code>AskForApproval</code></td><td>enum</td><td>Approval policy: never or on request.</td></tr>
+<tr><td><code>SandboxPolicy</code></td><td>enum</td><td>Sandbox mode: workspace write, read only, danger full access.</td></tr>
+<tr><td><code>DynamicToolSpec</code></td><td>struct</td><td>Tool name, description, and JSON schema parameters.</td></tr>
+<tr><td><code>UserInput</code></td><td>enum</td><td>Text, image, local image, skill, or mention.</td></tr>
+<tr><td><code>TextElement</code></td><td>struct</td><td>Structured byte range in a text input.</td></tr>
+<tr><td><code>ByteRange</code></td><td>struct</td><td>Start/end byte offsets.</td></tr>
+<tr><td><code>ContentItem</code></td><td>enum</td><td>Input or output text content.</td></tr>
+<tr><td><code>MessagePhase</code></td><td>enum</td><td>Commentary or final answer marker.</td></tr>
+<tr><td><code>ResponseItem</code></td><td>enum</td><td>Message, function call, or function call output.</td></tr>
+<tr><td><code>Event</code></td><td>struct</td><td>Submission id plus <code>EventMsg</code>.</td></tr>
+<tr><td><code>EventMsg</code></td><td>enum</td><td>Runtime event vocabulary.</td></tr>
+<tr><td>Event payload structs</td><td>structs</td><td>Error, warning, session, turn, message, tool, token events.</td></tr>
+<tr><td><code>TokenUsage</code></td><td>struct</td><td>Input/output/reasoning/total token counters.</td></tr>
+<tr><td><code>TokenUsageInfo</code></td><td>struct</td><td>Last and total usage plus optional context window.</td></tr>
+<tr><td><code>SessionSource</code></td><td>enum</td><td>CLI, web, custom, unknown.</td></tr>
+<tr><td><code>SessionMeta</code></td><td>struct</td><td>Persistent thread metadata.</td></tr>
+<tr><td><code>SessionMetaLine</code></td><td>struct</td><td>Rollout metadata wrapper.</td></tr>
+<tr><td><code>RolloutItem</code></td><td>enum</td><td>JSONL line type.</td></tr>
+<tr><td><code>ForkedFrom</code></td><td>enum</td><td>Fork source classification.</td></tr>
+<tr><td><code>ProtocolError</code></td><td>enum</td><td>Invalid thread id.</td></tr>
+</tbody></table>
+</div>
+<h2 id="session-kernel-interfaces"><a class="header" href="#session-kernel-interfaces">Session Kernel Interfaces</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Interface</th><th>Kind</th><th>Purpose</th></tr></thead><tbody>
+<tr><td><code>KernelError</code></td><td>enum</td><td>Runtime error type.</td></tr>
+<tr><td><code>SteerInputError</code></td><td>enum</td><td>Steering error type.</td></tr>
+<tr><td><code>SessionConfig</code></td><td>struct</td><td>Thread runtime configuration.</td></tr>
+<tr><td><code>ThreadConfigSnapshot</code></td><td>struct</td><td>Read-only config snapshot.</td></tr>
+<tr><td><code>StartThreadOk</code></td><td>struct</td><td>Thread id and handle returned by manager.</td></tr>
+<tr><td><code>ForkSnapshot</code></td><td>enum</td><td>Fork history selection.</td></tr>
+<tr><td><code>ToolExecutionResult</code></td><td>struct</td><td>Tool output wrapper.</td></tr>
+<tr><td><code>ToolExecutor</code></td><td>trait</td><td>Async tool execution boundary.</td></tr>
+<tr><td><code>Scheduler</code></td><td>trait</td><td>Async model turn boundary.</td></tr>
+<tr><td><code>HistoryStore</code></td><td>trait</td><td>Thread history persistence boundary.</td></tr>
+<tr><td><code>EventSink</code></td><td>trait</td><td>Async event sink boundary.</td></tr>
+<tr><td><code>TurnRequest</code></td><td>struct</td><td>Complete scheduler request.</td></tr>
+<tr><td><code>SchedulerOutput</code></td><td>struct</td><td>Scheduler result for history and final message.</td></tr>
+<tr><td><code>EventEmitter</code></td><td>struct</td><td>Submission-scoped event sender.</td></tr>
+<tr><td><code>CancellationFlag</code></td><td>struct</td><td>Shared cancellation flag.</td></tr>
+<tr><td><code>LocalHistoryStore</code></td><td>struct</td><td>Rollout-backed history store.</td></tr>
+<tr><td><code>ThreadManager</code></td><td>struct</td><td>Active thread manager and factory.</td></tr>
+<tr><td><code>ThreadHandle</code></td><td>struct</td><td>Per-thread submission/event/history handle.</td></tr>
+</tbody></table>
+</div>
+<h2 id="scheduler-interfaces"><a class="header" href="#scheduler-interfaces">Scheduler Interfaces</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Interface</th><th>Kind</th><th>Purpose</th></tr></thead><tbody>
+<tr><td><code>OpenAiScheduler</code></td><td>struct</td><td>Real OpenAI-compatible scheduler.</td></tr>
+<tr><td><code>SyntheticScheduler</code></td><td>struct</td><td>Local deterministic scheduler.</td></tr>
+</tbody></table>
+</div>
+<h2 id="openai-client-interfaces"><a class="header" href="#openai-client-interfaces">OpenAI Client Interfaces</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Interface</th><th>Kind</th><th>Purpose</th></tr></thead><tbody>
+<tr><td><code>AuthProvider</code></td><td>trait</td><td>Bearer-token source.</td></tr>
+<tr><td><code>BearerAuth</code></td><td>struct</td><td>Static bearer-token auth.</td></tr>
+<tr><td><code>Client</code></td><td>struct</td><td>Top-level API client.</td></tr>
+<tr><td><code>ClientBuilder</code></td><td>struct</td><td>Client configuration builder.</td></tr>
+<tr><td><code>Provider</code></td><td>struct</td><td>Endpoint, headers, query params, retry, timeout.</td></tr>
+<tr><td><code>RetryConfig</code></td><td>struct</td><td>High-level retry settings.</td></tr>
+<tr><td><code>Request</code></td><td>struct</td><td>Transport-neutral HTTP request.</td></tr>
+<tr><td><code>Response</code></td><td>struct</td><td>Transport-neutral HTTP response.</td></tr>
+<tr><td><code>HttpTransport</code></td><td>trait</td><td>Execute and stream HTTP requests.</td></tr>
+<tr><td><code>ReqwestTransport</code></td><td>struct</td><td>Reqwest implementation.</td></tr>
+<tr><td><code>RetryPolicy</code></td><td>struct</td><td>Retry execution policy.</td></tr>
+<tr><td><code>RetryOn</code></td><td>struct</td><td>Retry predicate settings.</td></tr>
+<tr><td><code>Chat</code></td><td>struct</td><td>Chat namespace.</td></tr>
+<tr><td><code>Completions</code></td><td>struct</td><td>Chat completions API.</td></tr>
+<tr><td><code>ChatStream</code></td><td>struct</td><td>Async stream of chat events.</td></tr>
+<tr><td><code>ChatStreamEvent</code></td><td>enum</td><td>Delta or done.</td></tr>
+<tr><td><code>ChatCompletionRequest</code></td><td>struct</td><td>Chat request payload.</td></tr>
+<tr><td><code>Message</code></td><td>struct</td><td>Chat message.</td></tr>
+<tr><td><code>Role</code></td><td>enum</td><td>System, user, assistant, tool.</td></tr>
+<tr><td><code>ToolCall</code></td><td>struct</td><td>Assistant tool call.</td></tr>
+<tr><td><code>ToolCallFunction</code></td><td>struct</td><td>Tool call function details.</td></tr>
+<tr><td><code>ChatCompletionResponse</code></td><td>struct</td><td>Non-streaming response.</td></tr>
+<tr><td><code>Choice</code></td><td>struct</td><td>Response choice.</td></tr>
+<tr><td><code>ToolDefinition</code></td><td>struct</td><td>Tool definition payload.</td></tr>
+<tr><td><code>FunctionDef</code></td><td>struct</td><td>Function tool details.</td></tr>
+<tr><td><code>Usage</code></td><td>struct</td><td>Token usage.</td></tr>
+<tr><td><code>FinishReason</code></td><td>enum</td><td>Stop, tool calls, length, content filter.</td></tr>
+<tr><td><code>StreamChunk</code> and delta types</td><td>structs</td><td>Streaming response shape.</td></tr>
+<tr><td><code>TransportError</code>, <code>StreamError</code>, <code>ApiError</code></td><td>enums</td><td>Error hierarchy.</td></tr>
+</tbody></table>
+</div>
+<h2 id="status-interfaces"><a class="header" href="#status-interfaces">Status Interfaces</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Interface</th><th>Kind</th><th>Purpose</th></tr></thead><tbody>
+<tr><td><code>WorkspaceMeta</code></td><td>struct</td><td>Workspace root/name/language.</td></tr>
+<tr><td><code>Freshness</code></td><td>enum</td><td>Segment freshness.</td></tr>
+<tr><td><code>RiskLevel</code></td><td>enum</td><td>Segment risk.</td></tr>
+<tr><td><code>SegmentKind</code></td><td>enum</td><td>Segment category.</td></tr>
+<tr><td><code>StatusSegment</code></td><td>struct</td><td>Deterministic status segment.</td></tr>
+<tr><td><code>Position</code>, <code>TextRange</code></td><td>structs</td><td>Editor positions and ranges.</td></tr>
+<tr><td><code>EditorRef</code></td><td>struct</td><td>File editor reference.</td></tr>
+<tr><td><code>VisibleRange</code></td><td>struct</td><td>Visible editor range.</td></tr>
+<tr><td><code>SelectionState</code></td><td>struct</td><td>Selection state.</td></tr>
+<tr><td><code>CursorContext</code></td><td>struct</td><td>Cursor bubble and symbol hint.</td></tr>
+<tr><td><code>DiagnosticSeverity</code></td><td>enum</td><td>VSCode diagnostic severity.</td></tr>
+<tr><td><code>DiagnosticEvent</code></td><td>struct</td><td>Diagnostic record.</td></tr>
+<tr><td><code>TerminalSessionState</code></td><td>struct</td><td>Terminal-like session state.</td></tr>
+<tr><td><code>VscodeTaskState</code></td><td>struct</td><td>Task state.</td></tr>
+<tr><td><code>DebugSessionState</code></td><td>struct</td><td>Debug state.</td></tr>
+<tr><td><code>ClipboardHint</code></td><td>struct</td><td>Clipboard summary.</td></tr>
+<tr><td><code>VscodeStatus</code></td><td>struct</td><td>Full IDE status payload.</td></tr>
+<tr><td><code>GitDiffSummary</code></td><td>struct</td><td>Diff shortstat.</td></tr>
+<tr><td><code>GitState</code></td><td>struct</td><td>Git working tree state.</td></tr>
+<tr><td><code>CommandResult</code></td><td>struct</td><td>Command result record.</td></tr>
+<tr><td><code>CommandState</code></td><td>struct</td><td>Recent command list.</td></tr>
+<tr><td><code>CodebaseStatus</code></td><td>struct</td><td>Full status snapshot.</td></tr>
+<tr><td><code>ProactiveSuggestion</code></td><td>struct</td><td>Suggested intervention.</td></tr>
+<tr><td><code>StucknessSignal</code></td><td>struct</td><td>Friction detection result.</td></tr>
+<tr><td><code>StatusReport</code></td><td>struct</td><td>UI-facing report.</td></tr>
+<tr><td><code>ContextCapsule</code></td><td>struct</td><td>Prompt-facing context.</td></tr>
+<tr><td><code>StatusStore</code></td><td>struct</td><td>Mutable status store.</td></tr>
+<tr><td><code>ParsedGitStatus</code></td><td>struct</td><td>Parsed porcelain status.</td></tr>
+</tbody></table>
+</div>
+<h2 id="persistence-interfaces"><a class="header" href="#persistence-interfaces">Persistence Interfaces</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Interface</th><th>Kind</th><th>Purpose</th></tr></thead><tbody>
+<tr><td><code>RolloutConfig</code></td><td>struct</td><td>Rollout root and derived dirs.</td></tr>
+<tr><td><code>RolloutRecorderParams</code></td><td>struct</td><td>Metadata for recorder creation.</td></tr>
+<tr><td><code>RolloutRecorder</code></td><td>struct</td><td>Append-only rollout writer.</td></tr>
+<tr><td><code>ThreadItem</code></td><td>struct</td><td>Listed rollout thread.</td></tr>
+<tr><td><code>ThreadListConfig</code></td><td>struct</td><td>Include archived flag.</td></tr>
+<tr><td><code>ThreadsPage</code></td><td>struct</td><td>Rollout listing page.</td></tr>
+<tr><td><code>ThreadStoreError</code></td><td>enum</td><td>Thread store errors.</td></tr>
+<tr><td><code>ThreadStore</code></td><td>trait</td><td>Thread storage API.</td></tr>
+<tr><td><code>LocalThreadStore</code></td><td>struct</td><td>Local rollout-backed store.</td></tr>
+<tr><td><code>RemoteThreadStore</code></td><td>struct</td><td>Remote stub.</td></tr>
+<tr><td><code>ThreadRecorder</code></td><td>struct</td><td>Append helper.</td></tr>
+<tr><td><code>StateRuntime</code></td><td>struct</td><td>Metadata/log runtime.</td></tr>
+<tr><td><code>ThreadMetadata</code></td><td>struct</td><td>Thread metadata row.</td></tr>
+<tr><td><code>ThreadMetadataBuilder</code></td><td>struct</td><td>Optional metadata builder.</td></tr>
+<tr><td><code>LogEntry</code>, <code>LogQuery</code>, <code>LogRow</code></td><td>structs</td><td>Log API shell.</td></tr>
+</tbody></table>
+</div>
+<h2 id="ui-bridge-interfaces"><a class="header" href="#ui-bridge-interfaces">UI Bridge Interfaces</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Interface</th><th>Kind</th><th>Purpose</th></tr></thead><tbody>
+<tr><td><code>VscodeRequestEnvelope</code></td><td>struct</td><td>Stdio request envelope.</td></tr>
+<tr><td><code>VscodeRequest</code></td><td>enum</td><td>Initialize, status update, command result, prompt, shutdown.</td></tr>
+<tr><td><code>VscodeResponseEnvelope</code></td><td>struct</td><td>Stdio response envelope.</td></tr>
+<tr><td><code>VscodeResponse</code></td><td>enum</td><td>Ready, status report, agent event, complete, error, shutdown complete.</td></tr>
+<tr><td><code>VscodeRuntimeEvent</code></td><td>enum</td><td>Surface event for VSCode.</td></tr>
+<tr><td><code>WebEvent</code></td><td>struct</td><td>SSE event name and JSON data.</td></tr>
+<tr><td><code>CliEvent</code></td><td>enum</td><td>Terminal event rendering instruction.</td></tr>
+</tbody></table>
+</div>
+<h2 id="root-runtime-interfaces"><a class="header" href="#root-runtime-interfaces">Root Runtime Interfaces</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Interface</th><th>Kind</th><th>Purpose</th></tr></thead><tbody>
+<tr><td><code>Cli</code></td><td>struct</td><td>CLI flag parser.</td></tr>
+<tr><td><code>AppState</code></td><td>struct</td><td>Web harness state.</td></tr>
+<tr><td><code>ChatRequest</code>, <code>WebMessage</code></td><td>structs</td><td>Web chat payload.</td></tr>
+<tr><td><code>LocalToolExecutor</code></td><td>struct</td><td>Root tool executor implementation.</td></tr>
+<tr><td><code>ToolResult</code></td><td>struct</td><td>Tool output wrapper.</td></tr>
+<tr><td><code>VscodeServer</code></td><td>struct</td><td>Internal stdio server state.</td></tr>
+</tbody></table>
+</div>
+<h2 id="vscode-extension-interfaces"><a class="header" href="#vscode-extension-interfaces">VSCode Extension Interfaces</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Interface</th><th>Kind</th><th>Purpose</th></tr></thead><tbody>
+<tr><td><code>activate</code>, <code>deactivate</code></td><td>functions</td><td>Extension lifecycle.</td></tr>
+<tr><td><code>MarvisController</code></td><td>class</td><td>Main extension coordinator.</td></tr>
+<tr><td><code>RuntimeClient</code></td><td>class</td><td>Child process JSON-RPC-like client.</td></tr>
+<tr><td><code>MarvisCodeActionProvider</code></td><td>class</td><td>Diagnostic quick fixes.</td></tr>
+<tr><td>helper functions</td><td>functions</td><td>Runtime resolution, status collection, rendering, truncation, path checks.</td></tr>
+</tbody></table>
+</div>
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../appendix/module-index.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../appendix/module-index.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="../elasticlunr.min.js"></script>
+        <script src="../mark.min.js"></script>
+        <script src="../searcher.js"></script>
+
+        <script src="../clipboard.min.js"></script>
+        <script src="../highlight.js"></script>
+        <script src="../book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+    </div>
+    </body>
+</html>

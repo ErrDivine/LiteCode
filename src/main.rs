@@ -1,4 +1,5 @@
 mod tools;
+mod vscode;
 mod web;
 
 use anyhow::{Context, Result};
@@ -29,6 +30,10 @@ struct Cli {
     #[arg(long)]
     web: bool,
 
+    /// Run the VSCode extension stdio bridge
+    #[arg(long)]
+    vscode_stdio: bool,
+
     /// Model to use
     #[arg(short, long, default_value = "nvidia/nemotron-3-super-120b-a12b:free")]
     model: String,
@@ -41,6 +46,10 @@ struct Cli {
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
+
+    if cli.vscode_stdio {
+        return vscode::serve_stdio(cli.model, cli.max_tokens).await;
+    }
 
     let api_key = std::env::var("OPENROUTER_API_KEY")
         .context("OPENROUTER_API_KEY environment variable not set")?;

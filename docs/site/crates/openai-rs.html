@@ -1,0 +1,331 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>OpenAI Client - lite-code / Marvis Runtime Design</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="../highlight.css">
+        <link rel="stylesheet" href="../tomorrow-night.css">
+        <link rel="stylesheet" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+        <link rel="stylesheet" href="../theme/custom.css">
+
+
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "../";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="../toc.js"></script>
+    </head>
+    <body>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="../toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">lite-code / Marvis Runtime Design</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="openai-client"><a class="header" href="#openai-client">OpenAI Client</a></h1>
+<p><code>crates/openai-rs</code> is a reusable OpenAI-compatible client. The scheduler uses it for streaming chat completions, but the crate itself has no Marvis-specific concepts.</p>
+<h2 id="module-map"><a class="header" href="#module-map">Module Map</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Module</th><th>Purpose</th></tr></thead><tbody>
+<tr><td><code>lib.rs</code></td><td>Public module declarations and top-level re-exports.</td></tr>
+<tr><td><code>auth.rs</code></td><td>Auth provider trait and bearer-token auth.</td></tr>
+<tr><td><code>client.rs</code></td><td>Top-level <code>Client</code> and <code>ClientBuilder</code>.</td></tr>
+<tr><td><code>provider.rs</code></td><td>Provider URL, headers, query params, retry config, and stream timeout.</td></tr>
+<tr><td><code>request.rs</code></td><td>Transport-neutral request and response structs.</td></tr>
+<tr><td><code>transport.rs</code></td><td>HTTP transport trait and reqwest implementation.</td></tr>
+<tr><td><code>retry.rs</code></td><td>Retry policy, retry predicates, exponential backoff with jitter.</td></tr>
+<tr><td><code>sse.rs</code></td><td>SSE byte stream parser task.</td></tr>
+<tr><td><code>error.rs</code></td><td>Transport, stream, and API error enums.</td></tr>
+<tr><td><code>chat/mod.rs</code></td><td>Chat namespace.</td></tr>
+<tr><td><code>chat/completions.rs</code></td><td>Chat completion create and create_stream APIs.</td></tr>
+<tr><td><code>types/chat.rs</code></td><td>Chat request, message, role, tool call, and response types.</td></tr>
+<tr><td><code>types/common.rs</code></td><td>Tool definition, function definition, usage, finish reason.</td></tr>
+<tr><td><code>types/stream.rs</code></td><td>Streaming chunk and delta types.</td></tr>
+</tbody></table>
+</div>
+<h2 id="public-re-exports"><a class="header" href="#public-re-exports">Public Re-exports</a></h2>
+<p>The crate root re-exports:</p>
+<ul>
+<li><code>AuthProvider</code>, <code>BearerAuth</code></li>
+<li><code>ChatStream</code>, <code>ChatStreamEvent</code></li>
+<li><code>Client</code>, <code>ClientBuilder</code></li>
+<li><code>ApiError</code>, <code>StreamError</code>, <code>TransportError</code></li>
+<li><code>Provider</code>, <code>RetryConfig</code></li>
+<li>chat request/response/message/tool types</li>
+<li>common usage and finish-reason types</li>
+<li>streaming delta types</li>
+</ul>
+<p>This lets consumers use <code>openai_rs::Client</code> and related types without deep module paths.</p>
+<h2 id="client-and-provider"><a class="header" href="#client-and-provider">Client And Provider</a></h2>
+<p><code>Client::builder()</code> creates a <code>ClientBuilder</code> with defaults:</p>
+<ul>
+<li>base URL: <code>https://api.openai.com/v1</code></li>
+<li>max retries: <code>3</code></li>
+<li>no global request timeout</li>
+<li>stream idle timeout: <code>30s</code></li>
+</ul>
+<p>Builder methods:</p>
+<ul>
+<li><code>api_key(key)</code></li>
+<li><code>base_url(url)</code></li>
+<li><code>max_retries(n)</code></li>
+<li><code>timeout(duration)</code></li>
+<li><code>stream_idle_timeout(duration)</code></li>
+<li><code>build()</code></li>
+</ul>
+<p><code>Provider</code> is the runtime endpoint config:</p>
+<ul>
+<li><code>base_url</code></li>
+<li>optional query params</li>
+<li>headers</li>
+<li>retry config</li>
+<li>stream idle timeout</li>
+</ul>
+<p><code>Provider::url_for_path</code> joins base URL, path, and query params. <code>Provider::build_request</code> creates a <code>Request</code> with method, URL, cloned headers, no body, and no timeout.</p>
+<h2 id="auth"><a class="header" href="#auth">Auth</a></h2>
+<p><code>AuthProvider</code> returns an optional bearer token. <code>BearerAuth</code> stores one token and returns it for each request. Internal <code>add_auth_headers</code> attaches an <code>Authorization: Bearer ...</code> header when a token is available.</p>
+<h2 id="transport"><a class="header" href="#transport">Transport</a></h2>
+<p><code>HttpTransport</code> defines:</p>
+<ul>
+<li><code>execute(req) -&gt; Response</code></li>
+<li><code>stream(req) -&gt; StreamResponse</code></li>
+</ul>
+<p><code>ReqwestTransport</code> implements it with <code>reqwest::Client</code>.</p>
+<p>Transport behavior:</p>
+<ul>
+<li>JSON bodies are sent with <code>.json(&amp;body)</code>.</li>
+<li>Non-success responses become <code>TransportError::Http</code>.</li>
+<li>Timeouts become <code>TransportError::Timeout</code>.</li>
+<li>Other reqwest errors become <code>TransportError::Network</code>.</li>
+<li>Streaming responses expose a boxed byte stream.</li>
+</ul>
+<h2 id="retry"><a class="header" href="#retry">Retry</a></h2>
+<p><code>RetryConfig</code> converts to <code>RetryPolicy</code>.</p>
+<p>Retry controls:</p>
+<ul>
+<li>maximum attempts</li>
+<li>base delay</li>
+<li>retry 429</li>
+<li>retry 5xx</li>
+<li>retry transport errors</li>
+</ul>
+<p><code>run_with_retry</code> regenerates the request for every attempt. <code>backoff</code> uses exponential delay with 0.9 to 1.1 jitter.</p>
+<h2 id="sse-streaming"><a class="header" href="#sse-streaming">SSE Streaming</a></h2>
+<p><code>sse_stream</code> takes a byte stream and forwards raw SSE <code>data:</code> payload strings over a channel. It applies an idle timeout per stream item. Timeouts and parsing failures are sent as <code>StreamError</code> values.</p>
+<h2 id="chat-completions"><a class="header" href="#chat-completions">Chat Completions</a></h2>
+<p><code>Chat::completions()</code> returns a <code>Completions</code> namespace.</p>
+<p><code>Completions::create</code>:</p>
+<ul>
+<li>forces <code>stream = false</code></li>
+<li>serializes <code>ChatCompletionRequest</code></li>
+<li>runs a POST to <code>chat/completions</code> with retry</li>
+<li>parses <code>ChatCompletionResponse</code></li>
+</ul>
+<p><code>Completions::create_stream</code>:</p>
+<ul>
+<li>forces <code>stream = true</code></li>
+<li>sets <code>Accept: text/event-stream</code></li>
+<li>starts SSE parsing</li>
+<li>converts chunks into <code>ChatStreamEvent::Delta</code></li>
+<li>emits <code>ChatStreamEvent::Done</code> when <code>[DONE]</code> appears</li>
+</ul>
+<p><code>ChatStreamEvent::Delta</code> contains optional content, optional tool-call deltas, and optional finish reason.</p>
+<h2 id="type-design"><a class="header" href="#type-design">Type Design</a></h2>
+<p>The type set intentionally mirrors OpenAI-compatible chat APIs:</p>
+<ul>
+<li><code>ChatCompletionRequest</code></li>
+<li><code>Message</code></li>
+<li><code>Role</code></li>
+<li><code>ToolCall</code></li>
+<li><code>ToolCallFunction</code></li>
+<li><code>ChatCompletionResponse</code></li>
+<li><code>Choice</code></li>
+<li><code>ToolDefinition</code></li>
+<li><code>FunctionDef</code></li>
+<li><code>Usage</code></li>
+<li><code>FinishReason</code></li>
+<li><code>StreamChunk</code>, <code>StreamChoice</code>, <code>Delta</code>, <code>ToolCallDelta</code>, <code>FunctionDelta</code></li>
+</ul>
+<p>This makes the scheduler mapping straightforward and keeps provider-specific JSON concerns inside one crate.</p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../crates/scheduler.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="../crates/status.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../crates/scheduler.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="../crates/status.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="../elasticlunr.min.js"></script>
+        <script src="../mark.min.js"></script>
+        <script src="../searcher.js"></script>
+
+        <script src="../clipboard.min.js"></script>
+        <script src="../highlight.js"></script>
+        <script src="../book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+    </div>
+    </body>
+</html>

@@ -1,0 +1,350 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>VSCode Extension - lite-code / Marvis Runtime Design</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="../highlight.css">
+        <link rel="stylesheet" href="../tomorrow-night.css">
+        <link rel="stylesheet" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+        <link rel="stylesheet" href="../theme/custom.css">
+
+
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "../";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="../toc.js"></script>
+    </head>
+    <body>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="../toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">lite-code / Marvis Runtime Design</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="vscode-extension"><a class="header" href="#vscode-extension">VSCode Extension</a></h1>
+<p><code>apps/vscode-extension</code> is the primary product shell for Marvis. It collects IDE state, starts the Rust runtime, renders status and trace information, and exposes user commands.</p>
+<h2 id="files"><a class="header" href="#files">Files</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>File</th><th>Purpose</th></tr></thead><tbody>
+<tr><td><code>package.json</code></td><td>VSCode contribution manifest, commands, configuration, activation events, and check script.</td></tr>
+<tr><td><code>extension.js</code></td><td>Extension implementation.</td></tr>
+<tr><td><code>README.md</code></td><td>Development instructions for launching the extension.</td></tr>
+</tbody></table>
+</div>
+<h2 id="commands"><a class="header" href="#commands">Commands</a></h2>
+<p>The extension contributes:</p>
+<ul>
+<li><code>Marvis: Start Marvis</code></li>
+<li><code>Marvis: Show Status</code></li>
+<li><code>Marvis: Refresh Status</code></li>
+<li><code>Marvis: Ask Marvis</code></li>
+<li><code>Marvis: Ask About Selection</code></li>
+<li><code>Marvis: Fix Near Cursor</code></li>
+<li><code>Marvis: Explain Diagnostic</code></li>
+<li><code>Marvis: Record Terminal Failure</code></li>
+<li><code>Marvis: Run Command and Record Result</code></li>
+<li><code>Marvis: Run VSCode Task and Record Result</code></li>
+</ul>
+<p>The editor context menu includes ask-about-selection and fix-near-cursor.</p>
+<h2 id="configuration"><a class="header" href="#configuration">Configuration</a></h2>
+<p>Settings:</p>
+<div class="table-wrapper"><table><thead><tr><th>Setting</th><th>Default</th><th>Meaning</th></tr></thead><tbody>
+<tr><td><code>marvis.runtimePath</code></td><td>empty</td><td>Optional path to the <code>lite-code</code> binary.</td></tr>
+<tr><td><code>marvis.model</code></td><td><code>nvidia/nemotron-3-super-120b-a12b:free</code></td><td>Model passed to the Rust runtime.</td></tr>
+<tr><td><code>marvis.maxTokens</code></td><td><code>4096</code></td><td>Maximum response tokens per model turn.</td></tr>
+</tbody></table>
+</div>
+<h2 id="activation"><a class="header" href="#activation">Activation</a></h2>
+<p>The extension activates on startup and on each Marvis command. <code>activate(context)</code> creates:</p>
+<ul>
+<li>a <code>Marvis</code> output channel</li>
+<li>one <code>MarvisController</code></li>
+<li>command registrations</li>
+<li>a quick-fix code action provider</li>
+</ul>
+<p><code>deactivate()</code> disposes the active controller.</p>
+<h2 id="marviscontroller"><a class="header" href="#marviscontroller">MarvisController</a></h2>
+<p><code>MarvisController</code> is the main extension coordinator.</p>
+<p>State:</p>
+<ul>
+<li>extension context</li>
+<li>output channel</li>
+<li>runtime client</li>
+<li>status webview panel</li>
+<li>last status report</li>
+<li>last raw status</li>
+<li>debounce timer</li>
+<li>recent opened/saved files</li>
+<li>command results</li>
+<li>running task map</li>
+<li>debug session map</li>
+<li>agent log</li>
+</ul>
+<p>Major methods:</p>
+<div class="table-wrapper"><table><thead><tr><th>Method</th><th>Purpose</th></tr></thead><tbody>
+<tr><td><code>watchWorkspace</code></td><td>Registers listeners for editor, diagnostics, save, task, and debug changes.</td></tr>
+<tr><td><code>start</code></td><td>Ensures runtime, refreshes status, and shows the panel.</td></tr>
+<tr><td><code>showStatus</code></td><td>Creates or reveals the webview panel.</td></tr>
+<tr><td><code>refreshStatus</code></td><td>Collects status and sends <code>status_update</code>.</td></tr>
+<tr><td><code>ask</code></td><td>Prompts the user for a request.</td></tr>
+<tr><td><code>askAboutSelection</code></td><td>Builds a prompt around selected code or cursor context.</td></tr>
+<tr><td><code>fixNearCursor</code></td><td>Confirms and asks Marvis to inspect and fix nearby issues.</td></tr>
+<tr><td><code>explainDiagnostic</code></td><td>Builds a prompt from a diagnostic.</td></tr>
+<tr><td><code>recordTerminalFailure</code></td><td>Manually records a failed command and output tail.</td></tr>
+<tr><td><code>runCommandAndRecord</code></td><td>Runs a shell command from workspace root and records result.</td></tr>
+<tr><td><code>runTaskAndRecord</code></td><td>Runs a VSCode task and records exit status.</td></tr>
+<tr><td><code>runPrompt</code></td><td>Sends <code>user_prompt</code> with current status and handles streamed events.</td></tr>
+<tr><td><code>sendCommandResult</code></td><td>Sends command result to runtime if available.</td></tr>
+<tr><td><code>ensureClient</code></td><td>Starts and initializes the Rust runtime.</td></tr>
+<tr><td><code>collectStatus</code></td><td>Builds the <code>VscodeStatus</code> JSON payload.</td></tr>
+<tr><td><code>scheduleStatusRefresh</code></td><td>Debounces status refresh after workspace changes.</td></tr>
+<tr><td><code>updatePanel</code></td><td>Sends current state to the webview.</td></tr>
+</tbody></table>
+</div>
+<h2 id="runtimeclient"><a class="header" href="#runtimeclient">RuntimeClient</a></h2>
+<p><code>RuntimeClient</code> owns the child process and request/response correlation.</p>
+<p>Fields:</p>
+<ul>
+<li>runtime command, args, cwd</li>
+<li>output channel</li>
+<li>message callback</li>
+<li>child process</li>
+<li>next request id</li>
+<li>pending request map</li>
+<li>stdout buffer</li>
+</ul>
+<p>Behavior:</p>
+<ul>
+<li><code>start()</code> spawns the runtime with piped stdio.</li>
+<li><code>request(type, payload, terminalTypes, timeoutMs)</code> writes one JSON line and waits for a terminal response type.</li>
+<li><code>handleStdout(text)</code> buffers newline-delimited JSON, dispatches messages, and resolves pending requests.</li>
+<li><code>rejectAll(error)</code> rejects every pending request.</li>
+<li><code>dispose()</code> writes a shutdown request, then kills the process after 500 ms if needed.</li>
+</ul>
+<p>This client treats stdout as protocol JSON and stderr as diagnostic output.</p>
+<h2 id="code-actions"><a class="header" href="#code-actions">Code Actions</a></h2>
+<p><code>MarvisCodeActionProvider</code> creates two quick fixes for diagnostics:</p>
+<ul>
+<li>ask Marvis to explain this diagnostic</li>
+<li>ask Marvis to fix near this diagnostic</li>
+</ul>
+<h2 id="status-collection"><a class="header" href="#status-collection">Status Collection</a></h2>
+<p>Helpers:</p>
+<ul>
+<li><code>collectOpenEditors</code></li>
+<li><code>collectDiagnostics</code></li>
+<li><code>editorRef</code></li>
+<li><code>cursorContextFor</code></li>
+<li><code>position</code></li>
+<li><code>textRange</code></li>
+<li><code>severity</code></li>
+<li><code>selectedText</code></li>
+<li><code>taskKind</code></li>
+<li><code>rangeLabel</code></li>
+<li><code>isPathInside</code></li>
+<li><code>truncate</code></li>
+<li><code>truncateTail</code></li>
+</ul>
+<p><code>collectStatus</code> sends active editor, open editors, visible ranges, selections, cursor bubble, recent files, diagnostics, terminal-like command results, running tasks, debug sessions, trust state, remote name, and VSCode app/profile name.</p>
+<h2 id="webview-panel"><a class="header" href="#webview-panel">Webview Panel</a></h2>
+<p><code>renderPanelHtml()</code> returns a self-contained HTML document with:</p>
+<ul>
+<li>toolbar buttons for ask, refresh, run command, record failure</li>
+<li>status summary section</li>
+<li>active segments section</li>
+<li>suggestion section</li>
+<li>trace log section</li>
+</ul>
+<p>The panel uses VSCode theme variables and receives state through <code>postMessage</code>.</p>
+<h2 id="runtime-resolution"><a class="header" href="#runtime-resolution">Runtime Resolution</a></h2>
+<p><code>resolveRuntime(context, workspaceRoot)</code> chooses:</p>
+<ol>
+<li>Configured <code>marvis.runtimePath</code> with <code>--vscode-stdio</code>.</li>
+<li><code>target/debug/lite-code</code> from the repo root.</li>
+<li><code>cargo run --quiet -- --vscode-stdio</code> from the repo root.</li>
+</ol>
+<h2 id="design-notes"><a class="header" href="#design-notes">Design Notes</a></h2>
+<p>The extension is intentionally thin with respect to agent behavior. It gathers high-quality IDE state and sends typed requests. Rust decides how to segment state, build the prompt context, run the model, and execute tools.</p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../runtime/tools.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="../operations/configuration.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../runtime/tools.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="../operations/configuration.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="../elasticlunr.min.js"></script>
+        <script src="../mark.min.js"></script>
+        <script src="../searcher.js"></script>
+
+        <script src="../clipboard.min.js"></script>
+        <script src="../highlight.js"></script>
+        <script src="../book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+    </div>
+    </body>
+</html>

@@ -1,0 +1,2073 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>lite-code / Marvis Runtime Design</title>
+        <meta name="robots" content="noindex">
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="highlight.css">
+        <link rel="stylesheet" href="tomorrow-night.css">
+        <link rel="stylesheet" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+        <link rel="stylesheet" href="theme/custom.css">
+
+
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="toc.js"></script>
+    </head>
+    <body>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">lite-code / Marvis Runtime Design</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="lite-code--marvis-runtime-design"><a class="header" href="#lite-code--marvis-runtime-design">lite-code / Marvis Runtime Design</a></h1>
+<p>This book documents the current <code>lite-code</code> workspace from a design point of view. It is written for maintainers who need to understand how the runtime is shaped, where each boundary sits, and which interfaces are stable enough to build against.</p>
+<p>The main product target is Marvis inside VSCode. The CLI and web harnesses still exist, but they are supporting surfaces around the same Rust runtime.</p>
+<h2 id="what-the-system-is"><a class="header" href="#what-the-system-is">What The System Is</a></h2>
+<p><code>lite-code</code> is a local coding-agent runtime. It accepts user turns, builds a model request from prior thread history and live workspace context, streams model output, executes local tools when the model requests them, emits normalized runtime events, and records thread history as JSONL.</p>
+<p>At the top level the project is split into:</p>
+<div class="table-wrapper"><table><thead><tr><th>Area</th><th>Role</th></tr></thead><tbody>
+<tr><td><code>apps/vscode-extension</code></td><td>VSCode product shell. It collects editor context and speaks newline-delimited JSON to the Rust binary.</td></tr>
+<tr><td><code>src/main.rs</code></td><td>Binary entrypoint. It selects CLI, web, or VSCode stdio mode.</td></tr>
+<tr><td><code>src/tools.rs</code></td><td>Current local tool executor for shell, file read/write/edit, directory listing, search, and glob discovery.</td></tr>
+<tr><td><code>src/web.rs</code></td><td>Temporary HTTP/SSE web harness.</td></tr>
+<tr><td><code>src/vscode.rs</code></td><td>Runtime side of the VSCode stdio bridge.</td></tr>
+<tr><td><code>crates/protocol</code></td><td>Runtime-neutral operations, events, ids, user inputs, response items, and rollout records.</td></tr>
+<tr><td><code>crates/session-kernel</code></td><td>Thread lifecycle, submissions, event channels, history, replay, forking, and turn orchestration boundary.</td></tr>
+<tr><td><code>crates/scheduler</code></td><td>Model turn execution against OpenAI-compatible chat completions plus a synthetic scheduler.</td></tr>
+<tr><td><code>crates/openai-rs</code></td><td>Reusable OpenAI-compatible HTTP and streaming client.</td></tr>
+<tr><td><code>crates/status</code></td><td>VSCode/codebase status model, deterministic segments, stuckness detection, git state, and context capsules.</td></tr>
+<tr><td><code>crates/ui-bridge</code></td><td>Adapters from kernel events into CLI, web SSE, and VSCode runtime event shapes.</td></tr>
+<tr><td><code>crates/rollout</code></td><td>JSONL session recording and listing.</td></tr>
+<tr><td><code>crates/thread-store</code></td><td>Storage-neutral thread persistence interface, with local JSONL implementation and remote stub.</td></tr>
+<tr><td><code>crates/state-store</code></td><td>Local JSONL metadata/log shell for future state persistence.</td></tr>
+</tbody></table>
+</div>
+<h2 id="reading-path"><a class="header" href="#reading-path">Reading Path</a></h2>
+<p>Start with <a href="design/overview.html">Product And Runtime Overview</a>, then <a href="design/architecture.html">Architecture</a>, then <a href="design/flows.html">Runtime Flows</a>. After that, each crate page can be read independently.</p>
+<p>For interface-level lookup, use:</p>
+<ul>
+<li><a href="appendix/module-index.html">Module Index</a> for file-by-file responsibilities.</li>
+<li><a href="appendix/interface-reference.html">Interface Reference</a> for the public types, traits, and message contracts.</li>
+</ul>
+<h2 id="building-the-web-view"><a class="header" href="#building-the-web-view">Building The Web View</a></h2>
+<p>The source of truth is this markdown tree under <code>docs/src</code>. The web site is generated with mdBook:</p>
+<pre><code class="language-bash">target/mdbook-bin/bin/mdbook build docs
+</code></pre>
+<p>The generated site is written to <code>docs/site</code>. Open <code>docs/site/index.html</code> in a browser or serve <code>docs/site</code> from any static file server.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="product-and-runtime-overview"><a class="header" href="#product-and-runtime-overview">Product And Runtime Overview</a></h1>
+<p>Marvis is organized as a local agent runtime with a VSCode shell. The extension owns IDE-native observation and UI affordances; Rust owns the model/tool loop, status normalization, history, and cross-surface event contracts.</p>
+<h2 id="product-shape"><a class="header" href="#product-shape">Product Shape</a></h2>
+<p>The VSCode extension starts the Rust binary in stdio mode:</p>
+<pre><code class="language-text">target/debug/lite-code --vscode-stdio
+</code></pre>
+<p>If the binary is missing, the extension falls back to:</p>
+<pre><code class="language-text">cargo run --quiet -- --vscode-stdio
+</code></pre>
+<p>The extension then sends newline-delimited JSON envelopes for initialization, status updates, command results, prompts, and shutdown. The Rust side answers with typed response envelopes and streamed agent events.</p>
+<h2 id="runtime-shape"><a class="header" href="#runtime-shape">Runtime Shape</a></h2>
+<p>The runtime is built around four internal contracts:</p>
+<div class="table-wrapper"><table><thead><tr><th>Contract</th><th>Owner</th><th>Purpose</th></tr></thead><tbody>
+<tr><td>Protocol data</td><td><code>crates/protocol</code></td><td>Shared vocabulary for operations, user inputs, response items, events, session metadata, and rollout lines.</td></tr>
+<tr><td>Thread runtime</td><td><code>crates/session-kernel</code></td><td>Owns submissions, active turns, cancellation, history, event emission, and persistence integration.</td></tr>
+<tr><td>Scheduler</td><td><code>crates/scheduler</code></td><td>Converts thread state into model chat messages, streams deltas, executes tool calls, and returns final response items.</td></tr>
+<tr><td>UI bridge</td><td><code>crates/ui-bridge</code></td><td>Converts kernel events into CLI, web, and VSCode-facing formats.</td></tr>
+</tbody></table>
+</div>
+<p>Everything else supports these contracts:</p>
+<ul>
+<li><code>crates/openai-rs</code> provides the HTTP/SSE client used by the scheduler.</li>
+<li><code>crates/status</code> turns IDE snapshots, git state, diagnostics, and command failures into deterministic context.</li>
+<li><code>crates/rollout</code>, <code>thread-store</code>, and <code>state-store</code> provide persistence surfaces.</li>
+<li><code>src/tools.rs</code> exposes the current local tool gateway.</li>
+</ul>
+<h2 id="design-intent"><a class="header" href="#design-intent">Design Intent</a></h2>
+<p>The codebase is moving toward a product where the editor is the primary context source and the Rust runtime is product-neutral. The bridge stays thin: it transports typed data but does not decide model behavior. The status crate similarly keeps its logic deterministic, so high-signal context can be tested without the model.</p>
+<p>The current implementation favors a small number of explicit interfaces over a broad plugin system. That makes it easier to evolve storage, scheduling, and UI surfaces independently.</p>
+<h2 id="current-maturity"><a class="header" href="#current-maturity">Current Maturity</a></h2>
+<p>The runtime already supports:</p>
+<ul>
+<li>CLI, web, and VSCode entrypoints.</li>
+<li>Streamed model output.</li>
+<li>Dynamic tool definitions.</li>
+<li>Local tool execution.</li>
+<li>JSONL history recording.</li>
+<li>Thread resume and fork basics.</li>
+<li>VSCode status ingestion.</li>
+<li>Synthetic scheduler fallback when <code>OPENROUTER_API_KEY</code> is absent.</li>
+</ul>
+<p>Areas that are intentionally still simple:</p>
+<ul>
+<li>Tool policy is not yet factored into a dedicated tool-gateway crate.</li>
+<li><code>thread-store</code> has a remote stub, but no remote implementation.</li>
+<li><code>state-store</code> is a JSONL shell despite constants that still refer to database-style names.</li>
+<li>Token usage reporting is shaped in protocol types, but not fully wired through the scheduler.</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="architecture"><a class="header" href="#architecture">Architecture</a></h1>
+<p>The workspace uses a layered runtime architecture. The top layer is product-specific. The middle layer is runtime orchestration. The lower layers are protocol, transport, status, and persistence support.</p>
+<h2 id="layer-map"><a class="header" href="#layer-map">Layer Map</a></h2>
+<pre><code class="language-text">VSCode extension
+  -&gt; ui-bridge JSON request/response types
+  -&gt; src/vscode.rs stdio server
+  -&gt; status crate context capsule
+  -&gt; session-kernel thread
+  -&gt; scheduler model/tool turn
+  -&gt; openai-rs client
+  -&gt; local tools
+  -&gt; rollout history
+</code></pre>
+<p>The CLI and web surfaces enter lower in the stack:</p>
+<pre><code class="language-text">CLI stdin/stdout -&gt; session-kernel -&gt; scheduler -&gt; tools -&gt; rollout
+Web HTTP/SSE    -&gt; session-kernel -&gt; scheduler -&gt; tools -&gt; rollout
+</code></pre>
+<h2 id="workspace-crate-dependencies"><a class="header" href="#workspace-crate-dependencies">Workspace Crate Dependencies</a></h2>
+<p>The important dependency direction is one-way:</p>
+<div class="table-wrapper"><table><thead><tr><th>Crate</th><th>Depends on</th><th>Design note</th></tr></thead><tbody>
+<tr><td><code>protocol</code></td><td><code>serde</code>, <code>serde_json</code>, <code>thiserror</code></td><td>Lowest shared vocabulary. No runtime ownership.</td></tr>
+<tr><td><code>openai-rs</code></td><td>HTTP, SSE, serde, retry dependencies</td><td>Reusable API client. No knowledge of Marvis thread state.</td></tr>
+<tr><td><code>rollout</code></td><td><code>protocol</code>, <code>tokio</code>, <code>serde_json</code></td><td>JSONL persistence of protocol records.</td></tr>
+<tr><td><code>thread-store</code></td><td><code>protocol</code>, <code>rollout</code></td><td>Store abstraction over rollout persistence.</td></tr>
+<tr><td><code>state-store</code></td><td><code>protocol</code>, <code>tokio</code>, <code>serde_json</code></td><td>Local metadata/log appenders.</td></tr>
+<tr><td><code>session-kernel</code></td><td><code>protocol</code>, <code>rollout</code>, <code>thread-store</code></td><td>Runtime core. Depends on traits for scheduler and tools.</td></tr>
+<tr><td><code>scheduler</code></td><td><code>session-kernel</code>, <code>protocol</code>, <code>openai-rs</code></td><td>Implements <code>session-kernel::Scheduler</code>.</td></tr>
+<tr><td><code>status</code></td><td><code>serde</code>, git subprocesses</td><td>Deterministic workspace status model. Independent from scheduler.</td></tr>
+<tr><td><code>ui-bridge</code></td><td><code>protocol</code>, <code>status</code></td><td>Surface-specific event/request shapes.</td></tr>
+<tr><td><code>lite-code</code> binary</td><td>all relevant crates</td><td>Composition root.</td></tr>
+</tbody></table>
+</div>
+<h2 id="composition-root"><a class="header" href="#composition-root">Composition Root</a></h2>
+<p><code>src/main.rs</code> composes:</p>
+<ul>
+<li><code>OpenAiScheduler::openrouter(api_key)</code> as the model scheduler.</li>
+<li><code>LocalToolExecutor</code> as the tool executor.</li>
+<li><code>ThreadManager::new(...)</code> as the thread runtime.</li>
+<li><code>tool_definitions()</code> as the dynamic tool surface.</li>
+<li><code>SessionConfig</code> as the per-thread runtime configuration.</li>
+</ul>
+<p><code>src/vscode.rs</code> composes the same pieces, but selects <code>SyntheticScheduler</code> when <code>OPENROUTER_API_KEY</code> is missing. That fallback allows VSCode status collection and bridge testing without a live model.</p>
+<h2 id="runtime-boundaries"><a class="header" href="#runtime-boundaries">Runtime Boundaries</a></h2>
+<h3 id="protocol-boundary"><a class="header" href="#protocol-boundary">Protocol Boundary</a></h3>
+<p>The protocol crate is the serialization boundary. Anything sent across process boundaries or written to rollout JSONL should be expressible as protocol types. This keeps UI shells and persistence from depending on internal scheduler structs.</p>
+<h3 id="kernel-boundary"><a class="header" href="#kernel-boundary">Kernel Boundary</a></h3>
+<p>The kernel is responsible for turn lifecycle, not model policy. It receives an <code>Op</code>, emits lifecycle events, persists user and assistant <code>ResponseItem</code>s, and delegates model execution to a <code>Scheduler</code>.</p>
+<h3 id="scheduler-boundary"><a class="header" href="#scheduler-boundary">Scheduler Boundary</a></h3>
+<p>The scheduler is responsible for mapping a <code>TurnRequest</code> into model calls and tool calls. It sees history, dynamic tools, the tool executor, and a cancellation flag. It returns <code>SchedulerOutput</code>.</p>
+<h3 id="tool-boundary"><a class="header" href="#tool-boundary">Tool Boundary</a></h3>
+<p>The kernel only knows the <code>ToolExecutor</code> trait. The current implementation is <code>LocalToolExecutor</code> in the binary crate. Moving this into a dedicated crate would let policy, tracing, and permissions evolve without changing the kernel.</p>
+<h3 id="status-boundary"><a class="header" href="#status-boundary">Status Boundary</a></h3>
+<p>The status crate produces deterministic summaries and context capsules. The model receives that capsule as text through the normal user-input path. This keeps context construction testable and prevents VSCode-specific types from leaking into the scheduler.</p>
+<h2 id="event-model"><a class="header" href="#event-model">Event Model</a></h2>
+<p>The kernel emits <code>protocol::Event</code> values. Each event has:</p>
+<ul>
+<li><code>id</code>: the submission id.</li>
+<li><code>msg</code>: an <code>EventMsg</code> variant.</li>
+</ul>
+<p>Surface adapters map these events:</p>
+<ul>
+<li>CLI prints deltas and tool logs.</li>
+<li>Web converts selected events into SSE names and JSON payloads.</li>
+<li>VSCode converts selected events into <code>VscodeRuntimeEvent</code>.</li>
+</ul>
+<p>This design makes the kernel unaware of UI presentation while preserving a single runtime event stream.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="runtime-flows"><a class="header" href="#runtime-flows">Runtime Flows</a></h1>
+<p>This page describes the major execution paths and where state changes occur.</p>
+<h2 id="cli-turn"><a class="header" href="#cli-turn">CLI Turn</a></h2>
+<pre><code class="language-text">stdin line
+  -&gt; ui_bridge::user_text_op
+  -&gt; ThreadHandle::submit
+  -&gt; submission_loop
+  -&gt; run_user_turn
+  -&gt; Scheduler::run_turn
+  -&gt; EventEmitter events
+  -&gt; ThreadHandle::next_event
+  -&gt; ui_bridge::event_to_cli
+  -&gt; stdout/stderr
+</code></pre>
+<p>The CLI waits for <code>TurnComplete</code> or an error before accepting the next input line. It consumes <code>SessionConfigured</code> once immediately after creating the thread.</p>
+<h2 id="web-chat-turn"><a class="header" href="#web-chat-turn">Web Chat Turn</a></h2>
+<pre><code class="language-text">POST /api/chat
+  -&gt; web::run_thread_loop
+  -&gt; start a new web thread
+  -&gt; inject prior web messages as ResponseItem history
+  -&gt; submit latest user message
+  -&gt; convert kernel events with event_to_web
+  -&gt; stream Server-Sent Events
+</code></pre>
+<p>The web harness is intentionally temporary. It uses <code>static/index.html</code> as a bundled frontend and starts a fresh thread for each request while injecting prior web messages into history.</p>
+<h2 id="vscode-prompt-turn"><a class="header" href="#vscode-prompt-turn">VSCode Prompt Turn</a></h2>
+<pre><code class="language-text">VSCode command
+  -&gt; collectStatus()
+  -&gt; RuntimeClient request: user_prompt
+  -&gt; src/vscode.rs VscodeServer::run_prompt
+  -&gt; StatusStore::build_context_capsule
+  -&gt; ContextCapsule::to_prompt_context
+  -&gt; ThreadManager::start_thread_with_tools
+  -&gt; ThreadHandle::submit
+  -&gt; streamed AgentEvent responses
+  -&gt; final StatusReport refresh
+</code></pre>
+<p>The user prompt is wrapped in a deterministic context capsule before it enters the model. The model sees editor focus, cursor bubble, diagnostics, command failures, git state, and the original user request.</p>
+<h2 id="status-refresh"><a class="header" href="#status-refresh">Status Refresh</a></h2>
+<pre><code class="language-text">VSCode event
+  -&gt; scheduleStatusRefresh debounce
+  -&gt; collectStatus()
+  -&gt; VscodeRequest::StatusUpdate
+  -&gt; StatusStore::update_vscode_status
+  -&gt; read_git_state
+  -&gt; segment_status
+  -&gt; StatusReport
+  -&gt; webview state update
+</code></pre>
+<p>The extension debounces editor and diagnostic changes by 500 ms. The Rust runtime resegments every time it receives new VSCode status, command results, or refreshed git state.</p>
+<h2 id="model-and-tool-loop"><a class="header" href="#model-and-tool-loop">Model And Tool Loop</a></h2>
+<pre><code class="language-text">TurnRequest
+  -&gt; history_to_messages
+  -&gt; insert system prompt
+  -&gt; append user text
+  -&gt; tool_spec_to_openai
+  -&gt; streaming chat/completions
+  -&gt; emit AgentMessageDelta events
+  -&gt; accumulate tool call deltas
+  -&gt; execute each tool call
+  -&gt; append tool results to model messages
+  -&gt; repeat until no tool calls or finish_reason == stop
+</code></pre>
+<p>Tool calls are not persisted as <code>ResponseItem::FunctionCall</code> values today. The scheduler emits tool begin/end events and feeds tool results back to the model as chat tool messages. Final assistant text is returned as a <code>ResponseItem::Message</code> and persisted by the kernel.</p>
+<h2 id="persistence-flow"><a class="header" href="#persistence-flow">Persistence Flow</a></h2>
+<pre><code class="language-text">ThreadManager::create_thread
+  -&gt; LocalHistoryStore::create_thread_record
+  -&gt; RolloutRecorder::new
+  -&gt; SessionMeta JSONL line
+
+run_user_turn
+  -&gt; append user ResponseItem
+  -&gt; scheduler output
+  -&gt; append assistant ResponseItem
+</code></pre>
+<p>Rollout files live under:</p>
+<pre><code class="language-text">.lite-code/sessions/&lt;thread-id&gt;.jsonl
+.lite-code/archived_sessions/&lt;thread-id&gt;.jsonl
+</code></pre>
+<p>Each line is a <code>RolloutItem</code>, either session metadata, a response item, or an event message.</p>
+<h2 id="cancellation-and-steering"><a class="header" href="#cancellation-and-steering">Cancellation And Steering</a></h2>
+<p><code>ThreadHandle::submit(Op::Interrupt)</code> cancels an active turn by setting the active <code>CancellationFlag</code>. If the thread is idle, the kernel emits a <code>TurnAborted</code> event with reason <code>idle</code>.</p>
+<p><code>ThreadHandle::steer_input(...)</code> supports adding input while a turn is active. If a turn is active, input is queued in <code>pending_input</code>; otherwise it starts a new user turn. After the active turn finishes, queued input is submitted as the next <code>UserInput</code> operation.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="design-contracts"><a class="header" href="#design-contracts">Design Contracts</a></h1>
+<p>The codebase has a small set of contracts that matter more than individual modules.</p>
+<h2 id="stable-serialization-contract"><a class="header" href="#stable-serialization-contract">Stable Serialization Contract</a></h2>
+<p>Types in <code>crates/protocol</code> are the serialization layer for runtime operations, events, response items, and rollout records. They should remain backward compatible whenever possible because rollout files and external shells depend on them.</p>
+<p>Design rules:</p>
+<ul>
+<li>Prefer additive fields with <code>#[serde(default)]</code>.</li>
+<li>Keep enum tag names stable once external surfaces use them.</li>
+<li>Keep process messages explicit and typed rather than ad hoc JSON.</li>
+<li>Use <code>ThreadId</code> instead of raw strings at Rust boundaries.</li>
+</ul>
+<h2 id="thread-contract"><a class="header" href="#thread-contract">Thread Contract</a></h2>
+<p><code>ThreadHandle</code> is the operational interface for a single conversation thread.</p>
+<p>It guarantees:</p>
+<ul>
+<li>Submissions are accepted through an async channel.</li>
+<li>Events are consumed from a single event receiver.</li>
+<li>User and assistant response items are appended to history.</li>
+<li>Rollout persistence happens if the thread has a rollout path.</li>
+<li>Interrupts emit a terminal abort event.</li>
+</ul>
+<p>It does not guarantee:</p>
+<ul>
+<li>Parallel turns on one thread. The active turn and pending input model is sequential.</li>
+<li>Durable persistence of every transient event. The main persisted history is response items.</li>
+<li>A stable token usage implementation yet.</li>
+</ul>
+<h2 id="scheduler-contract"><a class="header" href="#scheduler-contract">Scheduler Contract</a></h2>
+<p><code>Scheduler::run_turn</code> receives a complete <code>TurnRequest</code> and an <code>EventEmitter</code>.</p>
+<p>It owns:</p>
+<ul>
+<li>Model message construction.</li>
+<li>Model streaming.</li>
+<li>Tool call execution ordering.</li>
+<li>Final assistant message extraction.</li>
+<li>Returning persisted response items.</li>
+</ul>
+<p>It should not own:</p>
+<ul>
+<li>Thread creation or lookup.</li>
+<li>Rollout file paths.</li>
+<li>UI-specific event formats.</li>
+<li>VSCode status collection.</li>
+</ul>
+<h2 id="tool-contract"><a class="header" href="#tool-contract">Tool Contract</a></h2>
+<p><code>ToolExecutor</code> is intentionally minimal:</p>
+<pre><code class="language-rust ignore">async fn execute_tool(&amp;self, name: &amp;str, input: &amp;serde_json::Value) -&gt; ToolExecutionResult;</code></pre>
+<p>The current tool definitions are dynamic JSON schema records. The model receives the schema, then calls a tool by name with JSON arguments.</p>
+<p>Design implications:</p>
+<ul>
+<li>The scheduler can stay provider-neutral.</li>
+<li>Tool policy can be introduced behind <code>ToolExecutor</code>.</li>
+<li>Tool schema and tool execution must stay aligned manually until a stronger tool registry exists.</li>
+</ul>
+<h2 id="status-contract"><a class="header" href="#status-contract">Status Contract</a></h2>
+<p>The status crate turns external state into a deterministic <code>StatusReport</code> and <code>ContextCapsule</code>.</p>
+<p>It should remain:</p>
+<ul>
+<li>Pure for segmentation and stuckness functions where possible.</li>
+<li>Conservative about token volume.</li>
+<li>Independent from OpenAI-specific types.</li>
+<li>Testable without VSCode or a model.</li>
+</ul>
+<h2 id="ui-contract"><a class="header" href="#ui-contract">UI Contract</a></h2>
+<p>The UI bridge maps protocol events into surface-specific formats. It should be a formatting adapter, not a business-logic layer.</p>
+<p>Surface behavior:</p>
+<ul>
+<li>CLI consumes deltas, tool start/end, errors, aborts, and turn completion.</li>
+<li>Web exposes SSE events named <code>delta</code>, <code>tool_start</code>, <code>tool_end</code>, <code>error</code>, and <code>done</code>.</li>
+<li>VSCode exposes <code>VscodeRuntimeEvent</code> variants for deltas, final messages, tools, turn lifecycle, and errors.</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="protocol-crate"><a class="header" href="#protocol-crate">Protocol Crate</a></h1>
+<p><code>crates/protocol</code> is the shared runtime vocabulary. It contains no scheduling, UI, transport, or storage behavior. Its job is to make process messages, rollout lines, and internal runtime operations explicit and serializable.</p>
+<h2 id="modules"><a class="header" href="#modules">Modules</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Module</th><th>Purpose</th></tr></thead><tbody>
+<tr><td><code>lib.rs</code></td><td>Defines operations, user inputs, response items, events, session metadata, tool specs, rollout items, and compatibility re-export modules.</td></tr>
+<tr><td><code>thread_id.rs</code></td><td>Defines <code>ThreadId</code>, generation, parsing, display, and serde behavior.</td></tr>
+</tbody></table>
+</div>
+<p>Compatibility modules in <code>lib.rs</code> re-export the current types:</p>
+<ul>
+<li><code>protocol</code> re-exports the broad event and operation surface.</li>
+<li><code>user_input</code> re-exports <code>UserInput</code>, <code>TextElement</code>, and <code>ByteRange</code>.</li>
+<li><code>models</code> re-exports <code>ContentItem</code>, <code>MessagePhase</code>, and <code>ResponseItem</code>.</li>
+<li><code>dynamic_tools</code> re-exports <code>DynamicToolSpec</code>.</li>
+</ul>
+<p>These modules let older call sites keep using grouped paths while the source definitions remain in one file.</p>
+<h2 id="operation-model"><a class="header" href="#operation-model">Operation Model</a></h2>
+<p><code>Submission</code> wraps an <code>Op</code> with:</p>
+<ul>
+<li><code>id</code>: caller-provided or generated submission id.</li>
+<li><code>op</code>: requested runtime operation.</li>
+<li><code>trace</code>: optional <code>W3cTraceContext</code>.</li>
+</ul>
+<p><code>Op</code> variants:</p>
+<div class="table-wrapper"><table><thead><tr><th>Variant</th><th>Design role</th></tr></thead><tbody>
+<tr><td><code>Interrupt</code></td><td>Cancels the active turn or reports that the thread is idle.</td></tr>
+<tr><td><code>UserInput</code></td><td>Normal user input. Supports multiple <code>UserInput</code> items, optional final JSON schema, and optional client metadata.</td></tr>
+<tr><td><code>UserTurn</code></td><td>User input plus per-turn overrides for cwd, approval policy, sandbox policy, and model.</td></tr>
+<tr><td><code>InjectResponseItems</code></td><td>Directly adds prior response items to thread history. Used by web history injection and resume-style workflows.</td></tr>
+<tr><td><code>Synthetic</code></td><td>Convenience operation that turns a message into text input. Useful for tests and harnesses.</td></tr>
+</tbody></table>
+</div>
+<p><code>Op::user_text</code> is a helper for simple text turns.</p>
+<h2 id="user-input-model"><a class="header" href="#user-input-model">User Input Model</a></h2>
+<p><code>UserInput</code> supports:</p>
+<ul>
+<li><code>Text { text, text_elements }</code></li>
+<li><code>Image { image_url }</code></li>
+<li><code>LocalImage { path }</code></li>
+<li><code>Skill { name, path }</code></li>
+<li><code>Mention { name, path }</code></li>
+</ul>
+<p>The current scheduler only uses text inputs. The broader shape allows future UI shells to attach images, skills, and connector mentions without changing the kernel submission model.</p>
+<p><code>TextElement</code> uses a <code>ByteRange</code> and optional placeholder. This gives the protocol a way to represent structured selections or inline mentions inside text.</p>
+<h2 id="response-item-model"><a class="header" href="#response-item-model">Response Item Model</a></h2>
+<p><code>ResponseItem</code> is the persisted conversation unit:</p>
+<div class="table-wrapper"><table><thead><tr><th>Variant</th><th>Meaning</th></tr></thead><tbody>
+<tr><td><code>Message</code></td><td>User, assistant, or system-style content. Content is a list of <code>ContentItem</code>s.</td></tr>
+<tr><td><code>FunctionCall</code></td><td>A model tool call record. Defined in the protocol, but not currently persisted by the scheduler.</td></tr>
+<tr><td><code>FunctionCallOutput</code></td><td>Tool output associated with a call id.</td></tr>
+</tbody></table>
+</div>
+<p><code>ResponseItem::message(role, text)</code> picks <code>InputText</code> for non-assistant roles and <code>OutputText</code> for assistant role. <code>role()</code> and <code>text()</code> are convenience accessors used by the kernel and scheduler.</p>
+<p><code>MessagePhase</code> distinguishes <code>commentary</code> from <code>final_answer</code> for future surfaces that need channel-aware rendering.</p>
+<h2 id="event-model-1"><a class="header" href="#event-model-1">Event Model</a></h2>
+<p><code>Event</code> contains a submission id and an <code>EventMsg</code>.</p>
+<p><code>EventMsg</code> variants:</p>
+<ul>
+<li><code>Error</code></li>
+<li><code>Warning</code></li>
+<li><code>SessionConfigured</code></li>
+<li><code>ThreadNameUpdated</code></li>
+<li><code>TurnStarted</code></li>
+<li><code>TurnComplete</code></li>
+<li><code>TurnAborted</code></li>
+<li><code>UserMessage</code></li>
+<li><code>AgentMessage</code></li>
+<li><code>AgentMessageDelta</code></li>
+<li><code>ToolCallBegin</code></li>
+<li><code>ToolCallEnd</code></li>
+<li><code>TokenCount</code></li>
+<li><code>ShutdownComplete</code></li>
+</ul>
+<p>Event structs are intentionally small and UI-neutral. For example, <code>ToolCallBeginEvent</code> contains <code>call_id</code>, <code>name</code>, and serialized <code>arguments</code>; presentation is handled in <code>ui-bridge</code>.</p>
+<h2 id="session-metadata-and-rollout-records"><a class="header" href="#session-metadata-and-rollout-records">Session Metadata And Rollout Records</a></h2>
+<p><code>SessionMeta</code> captures persistent thread metadata:</p>
+<ul>
+<li><code>id</code></li>
+<li><code>forked_from_id</code></li>
+<li><code>timestamp</code></li>
+<li><code>cwd</code></li>
+<li><code>originator</code></li>
+<li><code>cli_version</code></li>
+<li><code>source</code></li>
+<li><code>model_provider</code></li>
+<li><code>dynamic_tools</code></li>
+</ul>
+<p><code>RolloutItem</code> wraps the JSONL line types:</p>
+<ul>
+<li><code>SessionMeta</code></li>
+<li><code>ResponseItem</code></li>
+<li><code>EventMsg</code></li>
+</ul>
+<p>Today the runtime writes session metadata and response items. The event variant exists for richer trace persistence.</p>
+<h2 id="threadid"><a class="header" href="#threadid">ThreadId</a></h2>
+<p><code>ThreadId</code> is a newtype over <code>String</code>.</p>
+<p>Key properties:</p>
+<ul>
+<li><code>ThreadId::new()</code> produces non-empty id strings using time and an atomic counter.</li>
+<li><code>from_string</code> trims and rejects empty ids.</li>
+<li><code>Display</code>, <code>From&lt;ThreadId&gt; for String</code>, <code>TryFrom&lt;&amp;str&gt;</code>, <code>Serialize</code>, and <code>Deserialize</code> are implemented.</li>
+</ul>
+<p>This type protects internal APIs from accepting arbitrary empty thread ids while staying JSON-friendly.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="session-kernel"><a class="header" href="#session-kernel">Session Kernel</a></h1>
+<p><code>crates/session-kernel</code> is the runtime core. It owns conversation threads, submission processing, event emission, history snapshots, cancellation, replay, fork basics, and integration with rollout persistence.</p>
+<p>The kernel deliberately avoids OpenAI-specific types. Model execution is delegated through the <code>Scheduler</code> trait, and tool execution is delegated through the <code>ToolExecutor</code> trait.</p>
+<h2 id="public-error-types"><a class="header" href="#public-error-types">Public Error Types</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Type</th><th>Purpose</th></tr></thead><tbody>
+<tr><td><code>KernelError</code></td><td>Main runtime error: closed channels, missing threads, invalid requests, IO errors, and rollout errors.</td></tr>
+<tr><td><code>SteerInputError</code></td><td>Error returned by <code>steer_input</code>, including wrong active turn id.</td></tr>
+<tr><td><code>Result&lt;T&gt;</code></td><td>Alias for <code>std::result::Result&lt;T, KernelError&gt;</code>.</td></tr>
+</tbody></table>
+</div>
+<h2 id="configuration-types"><a class="header" href="#configuration-types">Configuration Types</a></h2>
+<h3 id="sessionconfig"><a class="header" href="#sessionconfig"><code>SessionConfig</code></a></h3>
+<p>Thread runtime configuration:</p>
+<ul>
+<li><code>model</code></li>
+<li><code>model_provider_id</code></li>
+<li><code>cwd</code></li>
+<li><code>system_prompt</code></li>
+<li><code>max_tokens</code></li>
+<li><code>approval_policy</code></li>
+<li><code>sandbox_policy</code></li>
+<li><code>dynamic_tools</code></li>
+<li><code>persist_history</code></li>
+<li><code>history_root</code></li>
+<li><code>session_source</code></li>
+</ul>
+<p><code>SessionConfig::new(model, cwd)</code> defaults provider to <code>openrouter</code>, max tokens to <code>4096</code>, approval to <code>on_request</code>, sandbox to <code>workspace_write</code>, history persistence to true, and source to CLI.</p>
+<h3 id="threadconfigsnapshot"><a class="header" href="#threadconfigsnapshot"><code>ThreadConfigSnapshot</code></a></h3>
+<p>Read-only configuration view returned by <code>ThreadHandle::config_snapshot</code>. It includes model, provider, approval, sandbox, cwd, ephemeral flag, and session source.</p>
+<h3 id="forksnapshot"><a class="header" href="#forksnapshot"><code>ForkSnapshot</code></a></h3>
+<p>Controls fork history selection:</p>
+<ul>
+<li><code>Interrupted</code>: preserve current history.</li>
+<li><code>TruncateBeforeNthUserMessage(n)</code>: keep history up to but not including the nth user message.</li>
+</ul>
+<h2 id="core-traits"><a class="header" href="#core-traits">Core Traits</a></h2>
+<h3 id="toolexecutor"><a class="header" href="#toolexecutor"><code>ToolExecutor</code></a></h3>
+<p>The tool boundary:</p>
+<pre><code class="language-rust ignore">async fn execute_tool(&amp;self, name: &amp;str, input: &amp;serde_json::Value) -&gt; ToolExecutionResult;</code></pre>
+<p>The kernel does not inspect tool schemas or tool policy. It passes the executor into <code>TurnRequest</code>.</p>
+<h3 id="scheduler"><a class="header" href="#scheduler"><code>Scheduler</code></a></h3>
+<p>The model-turn boundary:</p>
+<pre><code class="language-rust ignore">async fn run_turn(
+    &amp;self,
+    request: TurnRequest,
+    events: EventEmitter,
+) -&gt; Result&lt;SchedulerOutput&gt;;</code></pre>
+<p>The scheduler owns model interaction and calls the tool executor when appropriate.</p>
+<h3 id="historystore"><a class="header" href="#historystore"><code>HistoryStore</code></a></h3>
+<p>Persistence abstraction used by <code>ThreadManager</code>:</p>
+<ul>
+<li><code>create_thread_record</code></li>
+<li><code>append_items</code></li>
+<li><code>read_rollout</code></li>
+<li><code>list_thread_ids</code></li>
+</ul>
+<p><code>LocalHistoryStore</code> implements this trait using the <code>rollout</code> crate.</p>
+<h3 id="eventsink"><a class="header" href="#eventsink"><code>EventSink</code></a></h3>
+<p>A general async event sink trait. It is currently defined as a simple event-emission boundary for future integration.</p>
+<h2 id="turn-types"><a class="header" href="#turn-types">Turn Types</a></h2>
+<h3 id="turnrequest"><a class="header" href="#turnrequest"><code>TurnRequest</code></a></h3>
+<p>The complete scheduler input:</p>
+<ul>
+<li>thread identity: <code>thread_id</code>, <code>submission_id</code>, <code>turn_id</code></li>
+<li>model settings: <code>model</code>, <code>max_tokens</code>, <code>system_prompt</code></li>
+<li>conversation state: <code>history</code>, <code>input</code></li>
+<li>tool state: <code>dynamic_tools</code>, <code>tool_executor</code></li>
+<li>output constraints: <code>final_output_json_schema</code></li>
+<li>cancellation: <code>CancellationFlag</code></li>
+</ul>
+<h3 id="scheduleroutput"><a class="header" href="#scheduleroutput"><code>SchedulerOutput</code></a></h3>
+<p>The scheduler returns:</p>
+<ul>
+<li><code>response_items</code>: items the kernel should append to thread history.</li>
+<li><code>final_message</code>: optional final assistant text for <code>AgentMessage</code> and <code>TurnComplete</code>.</li>
+<li><code>token_usage</code>: optional <code>TokenUsageInfo</code>.</li>
+</ul>
+<h3 id="toolexecutionresult"><a class="header" href="#toolexecutionresult"><code>ToolExecutionResult</code></a></h3>
+<p>Currently contains only <code>output: String</code>. This keeps the executor simple but leaves room for richer status in a future tool gateway.</p>
+<h2 id="eventemitter"><a class="header" href="#eventemitter">EventEmitter</a></h2>
+<p><code>EventEmitter</code> attaches the submission id to emitted <code>EventMsg</code> values and sends them over the thread event channel.</p>
+<p>Convenience methods:</p>
+<ul>
+<li><code>emit(msg)</code></li>
+<li><code>tool_begin(call_id, name, arguments)</code></li>
+<li><code>tool_end(call_id, name, output)</code></li>
+</ul>
+<p>Schedulers should emit deltas and tool events through this object rather than writing to UI adapters directly.</p>
+<h2 id="cancellationflag"><a class="header" href="#cancellationflag">CancellationFlag</a></h2>
+<p><code>CancellationFlag</code> wraps an atomic bool and is cloned into scheduler code. Interrupts call <code>cancel()</code>. Scheduler loops should periodically check <code>is_cancelled()</code> and return early.</p>
+<h2 id="threadmanager"><a class="header" href="#threadmanager">ThreadManager</a></h2>
+<p><code>ThreadManager</code> owns:</p>
+<ul>
+<li>active thread handles in an <code>RwLock&lt;HashMap&lt;ThreadId, ThreadHandle&gt;&gt;</code></li>
+<li>a shared scheduler</li>
+<li>a shared tool executor</li>
+<li>a shared history store</li>
+</ul>
+<p>Public constructors:</p>
+<ul>
+<li><code>new(scheduler, tool_executor, history_root)</code></li>
+<li><code>with_history_store(scheduler, tool_executor, history_store)</code></li>
+</ul>
+<p>Public operations:</p>
+<div class="table-wrapper"><table><thead><tr><th>Method</th><th>Design role</th></tr></thead><tbody>
+<tr><td><code>start_thread(config)</code></td><td>Starts a thread with config dynamic tools.</td></tr>
+<tr><td><code>start_thread_with_tools(config, tools, persist_extended_history)</code></td><td>Sets dynamic tools and persistence behavior before start.</td></tr>
+<tr><td><code>resume_thread_from_rollout(config, rollout_path)</code></td><td>Reads a rollout file, extracts session id and response history, and starts a live handle.</td></tr>
+<tr><td><code>fork_thread(source_thread_id, snapshot, config)</code></td><td>Creates a new thread from a source history snapshot.</td></tr>
+<tr><td><code>list_thread_ids()</code></td><td>Merges ids from persisted history and active handles.</td></tr>
+<tr><td><code>get_thread(thread_id)</code></td><td>Returns a live handle if active.</td></tr>
+</tbody></table>
+</div>
+<p>On thread creation, the manager emits <code>SessionConfigured</code> before any user turns.</p>
+<h2 id="threadhandle"><a class="header" href="#threadhandle">ThreadHandle</a></h2>
+<p><code>ThreadHandle</code> is the operational handle used by CLI, web, and VSCode code.</p>
+<p>Public methods:</p>
+<div class="table-wrapper"><table><thead><tr><th>Method</th><th>Behavior</th></tr></thead><tbody>
+<tr><td><code>submit(op)</code></td><td>Generates a submission id and sends the operation. Interrupts are handled immediately.</td></tr>
+<tr><td><code>submit_with_id(submission)</code></td><td>Sends a caller-provided submission.</td></tr>
+<tr><td><code>submit_with_trace(op, trace)</code></td><td>Sends an operation with W3C trace context.</td></tr>
+<tr><td><code>next_event()</code></td><td>Receives the next runtime event.</td></tr>
+<tr><td><code>steer_input(input, expected_turn_id, metadata)</code></td><td>Queues input during an active turn or starts a new turn while idle.</td></tr>
+<tr><td><code>inject_response_items(items)</code></td><td>Adds non-empty response items to history and persistence.</td></tr>
+<tr><td><code>flush_rollout()</code></td><td>Currently a no-op placeholder.</td></tr>
+<tr><td><code>config_snapshot()</code></td><td>Returns a thread configuration snapshot.</td></tr>
+<tr><td><code>token_usage_info()</code></td><td>Currently returns <code>None</code>.</td></tr>
+<tr><td><code>rollout_path()</code></td><td>Returns the rollout path if persistence is enabled.</td></tr>
+</tbody></table>
+</div>
+<p>Internal behavior:</p>
+<ul>
+<li><code>submission_loop</code> serially processes submitted operations.</li>
+<li><code>run_user_turn</code> emits <code>TurnStarted</code>, <code>UserMessage</code>, scheduler events, <code>AgentMessage</code>, and <code>TurnComplete</code>.</li>
+<li>User and assistant response items are persisted through the history store.</li>
+<li>Pending input is submitted as a new turn after the active turn completes.</li>
+</ul>
+<h2 id="design-notes"><a class="header" href="#design-notes">Design Notes</a></h2>
+<p>The kernel is intentionally channel-driven. That makes it easy for UI surfaces to consume one event stream while the runtime performs scheduler and tool work asynchronously.</p>
+<p>The biggest future boundary is tool policy. Today the scheduler gets direct access to a <code>ToolExecutor</code>; a policy-aware gateway can be introduced behind the same trait or through a richer trait without changing the UI bridge.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="scheduler-1"><a class="header" href="#scheduler-1">Scheduler</a></h1>
+<p><code>crates/scheduler</code> implements the <code>session-kernel::Scheduler</code> trait. It turns kernel <code>TurnRequest</code> values into OpenAI-compatible chat-completion calls, streams assistant deltas, executes tool calls, and returns final response items.</p>
+<h2 id="public-types"><a class="header" href="#public-types">Public Types</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Type</th><th>Purpose</th></tr></thead><tbody>
+<tr><td><code>OpenAiScheduler</code></td><td>Real model scheduler backed by <code>openai-rs::Client</code>.</td></tr>
+<tr><td><code>SyntheticScheduler</code></td><td>Deterministic fallback scheduler for bridge and status testing.</td></tr>
+</tbody></table>
+</div>
+<h2 id="openaischeduler"><a class="header" href="#openaischeduler">OpenAiScheduler</a></h2>
+<p>Constructors:</p>
+<ul>
+<li><code>OpenAiScheduler::new(client)</code></li>
+<li><code>OpenAiScheduler::openrouter(api_key)</code></li>
+</ul>
+<p><code>openrouter</code> builds a client with base URL:</p>
+<pre><code class="language-text">https://openrouter.ai/api/v1
+</code></pre>
+<p>and maps client construction errors into <code>KernelError::InvalidRequest</code>.</p>
+<h2 id="turn-execution"><a class="header" href="#turn-execution">Turn Execution</a></h2>
+<p><code>run_turn</code> performs this loop:</p>
+<ol>
+<li>Convert prior <code>ResponseItem</code> history into chat messages.</li>
+<li>Insert the configured system prompt as the first message.</li>
+<li>Concatenate text inputs from the current turn and append one user message.</li>
+<li>Convert dynamic tool specs into OpenAI function tool definitions.</li>
+<li>Send a streaming <code>chat/completions</code> request.</li>
+<li>Emit <code>AgentMessageDelta</code> events as content deltas arrive.</li>
+<li>Accumulate streamed tool-call deltas by index.</li>
+<li>If there are no tool calls, return final assistant message as <code>SchedulerOutput</code>.</li>
+<li>If there are tool calls, emit tool begin/end events, execute each tool, append tool results to the chat messages, and continue the loop.</li>
+</ol>
+<p>The scheduler checks <code>request.cancellation.is_cancelled()</code> before starting a request and while reading stream events.</p>
+<h2 id="tool-call-assembly"><a class="header" href="#tool-call-assembly">Tool Call Assembly</a></h2>
+<p>OpenAI-compatible streaming tool calls arrive as indexed deltas. The scheduler accumulates three strings per index:</p>
+<ul>
+<li>tool call id</li>
+<li>function name</li>
+<li>function arguments</li>
+</ul>
+<p>Only builders with a non-empty function name become <code>ToolCall</code> values. Function arguments are parsed as JSON. If parsing fails, an empty JSON object is passed to the tool executor.</p>
+<h2 id="history-conversion"><a class="header" href="#history-conversion">History Conversion</a></h2>
+<p><code>history_to_messages</code> maps:</p>
+<ul>
+<li><code>ResponseItem::Message</code> with role <code>system</code>, <code>user</code>, or <code>assistant</code> to corresponding chat messages.</li>
+<li><code>ResponseItem::FunctionCallOutput</code> to a tool result message.</li>
+<li><code>ResponseItem::FunctionCall</code> is ignored today.</li>
+</ul>
+<p>This keeps current model requests simple but means persisted tool call records are not replayed as assistant tool-call messages yet.</p>
+<h2 id="syntheticscheduler"><a class="header" href="#syntheticscheduler">SyntheticScheduler</a></h2>
+<p>The synthetic scheduler is used when the VSCode runtime starts without <code>OPENROUTER_API_KEY</code>.</p>
+<p>Behavior:</p>
+<ul>
+<li>Join text input items with newlines.</li>
+<li>Return <code>synthetic: &lt;text&gt;</code> or <code>ok</code> if empty.</li>
+<li>Emit one <code>AgentMessageDelta</code>.</li>
+<li>Return a single assistant <code>ResponseItem</code>.</li>
+</ul>
+<p>This allows extension development, status collection, and bridge tests without a real model.</p>
+<h2 id="design-notes-1"><a class="header" href="#design-notes-1">Design Notes</a></h2>
+<p>The scheduler is the only crate that knows both kernel turn semantics and OpenAI-compatible chat types. That is the correct place for message mapping, stream parsing, and tool-loop behavior.</p>
+<p>Provider-specific behavior is kept in <code>openai-rs</code>, while product-specific context construction stays in <code>status</code> and <code>src/vscode.rs</code>.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="openai-client"><a class="header" href="#openai-client">OpenAI Client</a></h1>
+<p><code>crates/openai-rs</code> is a reusable OpenAI-compatible client. The scheduler uses it for streaming chat completions, but the crate itself has no Marvis-specific concepts.</p>
+<h2 id="module-map"><a class="header" href="#module-map">Module Map</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Module</th><th>Purpose</th></tr></thead><tbody>
+<tr><td><code>lib.rs</code></td><td>Public module declarations and top-level re-exports.</td></tr>
+<tr><td><code>auth.rs</code></td><td>Auth provider trait and bearer-token auth.</td></tr>
+<tr><td><code>client.rs</code></td><td>Top-level <code>Client</code> and <code>ClientBuilder</code>.</td></tr>
+<tr><td><code>provider.rs</code></td><td>Provider URL, headers, query params, retry config, and stream timeout.</td></tr>
+<tr><td><code>request.rs</code></td><td>Transport-neutral request and response structs.</td></tr>
+<tr><td><code>transport.rs</code></td><td>HTTP transport trait and reqwest implementation.</td></tr>
+<tr><td><code>retry.rs</code></td><td>Retry policy, retry predicates, exponential backoff with jitter.</td></tr>
+<tr><td><code>sse.rs</code></td><td>SSE byte stream parser task.</td></tr>
+<tr><td><code>error.rs</code></td><td>Transport, stream, and API error enums.</td></tr>
+<tr><td><code>chat/mod.rs</code></td><td>Chat namespace.</td></tr>
+<tr><td><code>chat/completions.rs</code></td><td>Chat completion create and create_stream APIs.</td></tr>
+<tr><td><code>types/chat.rs</code></td><td>Chat request, message, role, tool call, and response types.</td></tr>
+<tr><td><code>types/common.rs</code></td><td>Tool definition, function definition, usage, finish reason.</td></tr>
+<tr><td><code>types/stream.rs</code></td><td>Streaming chunk and delta types.</td></tr>
+</tbody></table>
+</div>
+<h2 id="public-re-exports"><a class="header" href="#public-re-exports">Public Re-exports</a></h2>
+<p>The crate root re-exports:</p>
+<ul>
+<li><code>AuthProvider</code>, <code>BearerAuth</code></li>
+<li><code>ChatStream</code>, <code>ChatStreamEvent</code></li>
+<li><code>Client</code>, <code>ClientBuilder</code></li>
+<li><code>ApiError</code>, <code>StreamError</code>, <code>TransportError</code></li>
+<li><code>Provider</code>, <code>RetryConfig</code></li>
+<li>chat request/response/message/tool types</li>
+<li>common usage and finish-reason types</li>
+<li>streaming delta types</li>
+</ul>
+<p>This lets consumers use <code>openai_rs::Client</code> and related types without deep module paths.</p>
+<h2 id="client-and-provider"><a class="header" href="#client-and-provider">Client And Provider</a></h2>
+<p><code>Client::builder()</code> creates a <code>ClientBuilder</code> with defaults:</p>
+<ul>
+<li>base URL: <code>https://api.openai.com/v1</code></li>
+<li>max retries: <code>3</code></li>
+<li>no global request timeout</li>
+<li>stream idle timeout: <code>30s</code></li>
+</ul>
+<p>Builder methods:</p>
+<ul>
+<li><code>api_key(key)</code></li>
+<li><code>base_url(url)</code></li>
+<li><code>max_retries(n)</code></li>
+<li><code>timeout(duration)</code></li>
+<li><code>stream_idle_timeout(duration)</code></li>
+<li><code>build()</code></li>
+</ul>
+<p><code>Provider</code> is the runtime endpoint config:</p>
+<ul>
+<li><code>base_url</code></li>
+<li>optional query params</li>
+<li>headers</li>
+<li>retry config</li>
+<li>stream idle timeout</li>
+</ul>
+<p><code>Provider::url_for_path</code> joins base URL, path, and query params. <code>Provider::build_request</code> creates a <code>Request</code> with method, URL, cloned headers, no body, and no timeout.</p>
+<h2 id="auth"><a class="header" href="#auth">Auth</a></h2>
+<p><code>AuthProvider</code> returns an optional bearer token. <code>BearerAuth</code> stores one token and returns it for each request. Internal <code>add_auth_headers</code> attaches an <code>Authorization: Bearer ...</code> header when a token is available.</p>
+<h2 id="transport"><a class="header" href="#transport">Transport</a></h2>
+<p><code>HttpTransport</code> defines:</p>
+<ul>
+<li><code>execute(req) -&gt; Response</code></li>
+<li><code>stream(req) -&gt; StreamResponse</code></li>
+</ul>
+<p><code>ReqwestTransport</code> implements it with <code>reqwest::Client</code>.</p>
+<p>Transport behavior:</p>
+<ul>
+<li>JSON bodies are sent with <code>.json(&amp;body)</code>.</li>
+<li>Non-success responses become <code>TransportError::Http</code>.</li>
+<li>Timeouts become <code>TransportError::Timeout</code>.</li>
+<li>Other reqwest errors become <code>TransportError::Network</code>.</li>
+<li>Streaming responses expose a boxed byte stream.</li>
+</ul>
+<h2 id="retry"><a class="header" href="#retry">Retry</a></h2>
+<p><code>RetryConfig</code> converts to <code>RetryPolicy</code>.</p>
+<p>Retry controls:</p>
+<ul>
+<li>maximum attempts</li>
+<li>base delay</li>
+<li>retry 429</li>
+<li>retry 5xx</li>
+<li>retry transport errors</li>
+</ul>
+<p><code>run_with_retry</code> regenerates the request for every attempt. <code>backoff</code> uses exponential delay with 0.9 to 1.1 jitter.</p>
+<h2 id="sse-streaming"><a class="header" href="#sse-streaming">SSE Streaming</a></h2>
+<p><code>sse_stream</code> takes a byte stream and forwards raw SSE <code>data:</code> payload strings over a channel. It applies an idle timeout per stream item. Timeouts and parsing failures are sent as <code>StreamError</code> values.</p>
+<h2 id="chat-completions"><a class="header" href="#chat-completions">Chat Completions</a></h2>
+<p><code>Chat::completions()</code> returns a <code>Completions</code> namespace.</p>
+<p><code>Completions::create</code>:</p>
+<ul>
+<li>forces <code>stream = false</code></li>
+<li>serializes <code>ChatCompletionRequest</code></li>
+<li>runs a POST to <code>chat/completions</code> with retry</li>
+<li>parses <code>ChatCompletionResponse</code></li>
+</ul>
+<p><code>Completions::create_stream</code>:</p>
+<ul>
+<li>forces <code>stream = true</code></li>
+<li>sets <code>Accept: text/event-stream</code></li>
+<li>starts SSE parsing</li>
+<li>converts chunks into <code>ChatStreamEvent::Delta</code></li>
+<li>emits <code>ChatStreamEvent::Done</code> when <code>[DONE]</code> appears</li>
+</ul>
+<p><code>ChatStreamEvent::Delta</code> contains optional content, optional tool-call deltas, and optional finish reason.</p>
+<h2 id="type-design"><a class="header" href="#type-design">Type Design</a></h2>
+<p>The type set intentionally mirrors OpenAI-compatible chat APIs:</p>
+<ul>
+<li><code>ChatCompletionRequest</code></li>
+<li><code>Message</code></li>
+<li><code>Role</code></li>
+<li><code>ToolCall</code></li>
+<li><code>ToolCallFunction</code></li>
+<li><code>ChatCompletionResponse</code></li>
+<li><code>Choice</code></li>
+<li><code>ToolDefinition</code></li>
+<li><code>FunctionDef</code></li>
+<li><code>Usage</code></li>
+<li><code>FinishReason</code></li>
+<li><code>StreamChunk</code>, <code>StreamChoice</code>, <code>Delta</code>, <code>ToolCallDelta</code>, <code>FunctionDelta</code></li>
+</ul>
+<p>This makes the scheduler mapping straightforward and keeps provider-specific JSON concerns inside one crate.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="status-engine"><a class="header" href="#status-engine">Status Engine</a></h1>
+<p><code>crates/status</code> is the deterministic context engine for Marvis. It accepts IDE state, git state, and command results, then produces status reports, segments, stuckness signals, and prompt-ready context capsules.</p>
+<h2 id="data-model"><a class="header" href="#data-model">Data Model</a></h2>
+<h3 id="workspace"><a class="header" href="#workspace">Workspace</a></h3>
+<p><code>WorkspaceMeta</code> contains:</p>
+<ul>
+<li><code>root</code></li>
+<li><code>name</code></li>
+<li><code>primary_language</code></li>
+</ul>
+<p><code>WorkspaceMeta::new</code> infers Rust from <code>Cargo.toml</code> and JavaScript from <code>package.json</code>.</p>
+<h3 id="freshness-risk-and-segment-kind"><a class="header" href="#freshness-risk-and-segment-kind">Freshness, Risk, And Segment Kind</a></h3>
+<p>Enums:</p>
+<ul>
+<li><code>Freshness</code>: <code>hot</code>, <code>warm</code>, <code>cold</code>, <code>stale</code>, <code>unknown</code></li>
+<li><code>RiskLevel</code>: <code>low</code>, <code>medium</code>, <code>high</code>, <code>critical</code></li>
+<li><code>SegmentKind</code>: <code>user_focus</code>, <code>recent_diff</code>, <code>command_failure</code>, <code>failing_test</code>, <code>diagnostic_cluster</code>, <code>risk</code>, <code>unknown</code></li>
+</ul>
+<p>These fields allow segments to be ranked and rendered without model interpretation.</p>
+<h3 id="statussegment"><a class="header" href="#statussegment">StatusSegment</a></h3>
+<p>Each segment contains:</p>
+<ul>
+<li>stable <code>id</code></li>
+<li><code>kind</code></li>
+<li>human summary</li>
+<li>evidence labels</li>
+<li>related files</li>
+<li>related diagnostic ids</li>
+<li>token estimate</li>
+<li>freshness</li>
+<li>confidence</li>
+<li>importance</li>
+<li>risk level</li>
+</ul>
+<p>Segments are sorted by descending importance.</p>
+<h2 id="vscode-status-types"><a class="header" href="#vscode-status-types">VSCode Status Types</a></h2>
+<p>The VSCode status snapshot includes:</p>
+<ul>
+<li><code>EditorRef</code></li>
+<li><code>VisibleRange</code></li>
+<li><code>SelectionState</code></li>
+<li><code>CursorContext</code></li>
+<li><code>DiagnosticEvent</code></li>
+<li><code>TerminalSessionState</code></li>
+<li><code>VscodeTaskState</code></li>
+<li><code>DebugSessionState</code></li>
+<li><code>ClipboardHint</code></li>
+<li><code>VscodeStatus</code></li>
+</ul>
+<p><code>VscodeStatus</code> is the aggregate sent by the extension. It includes active editor, open editors, visible ranges, selections, cursor context, recent files, Problems diagnostics, terminal sessions, tasks, debug sessions, trust state, remote name, and profile/app name.</p>
+<h2 id="git-and-command-state"><a class="header" href="#git-and-command-state">Git And Command State</a></h2>
+<p><code>GitState</code> captures:</p>
+<ul>
+<li>whether the workspace is a repository</li>
+<li>branch</li>
+<li>head</li>
+<li>dirty files</li>
+<li>untracked files</li>
+<li>staged files</li>
+<li>deleted files</li>
+<li>optional diff summary</li>
+</ul>
+<p><code>read_git_state(root)</code> shells out to git:</p>
+<ul>
+<li><code>rev-parse --abbrev-ref HEAD</code></li>
+<li><code>rev-parse HEAD</code></li>
+<li><code>status --porcelain=v1</code></li>
+<li><code>diff --shortstat</code></li>
+</ul>
+<p>Parser helpers:</p>
+<ul>
+<li><code>parse_git_status_porcelain</code></li>
+<li><code>parse_diff_shortstat</code></li>
+</ul>
+<p><code>CommandResult</code> records a command, cwd, output tail, exit code, and timestamp. <code>failed()</code> returns true for non-zero exit codes or failure words in output.</p>
+<h2 id="codebasestatus-and-statusreport"><a class="header" href="#codebasestatus-and-statusreport">CodebaseStatus And StatusReport</a></h2>
+<p><code>CodebaseStatus</code> is the mutable snapshot:</p>
+<ul>
+<li>workspace metadata</li>
+<li>timestamp</li>
+<li>VSCode status</li>
+<li>git state</li>
+<li>command state</li>
+<li>active segments</li>
+</ul>
+<p><code>StatusReport</code> is the UI-facing view:</p>
+<ul>
+<li><code>snapshot_hash</code></li>
+<li>summary string</li>
+<li>active segments</li>
+<li>optional stuckness signal</li>
+<li>optional proactive suggestion</li>
+</ul>
+<p><code>summarize_status</code> produces a compact single-line summary with workspace, active editor, cursor, branch, dirty count, untracked count, diagnostics count, and segment count.</p>
+<h2 id="contextcapsule"><a class="header" href="#contextcapsule">ContextCapsule</a></h2>
+<p><code>ContextCapsule</code> is the prompt-facing context object. It includes:</p>
+<ul>
+<li>original user prompt</li>
+<li>status summary</li>
+<li>active segments</li>
+<li>active editor</li>
+<li>cursor context</li>
+<li>filtered diagnostics</li>
+<li>recent commands</li>
+<li>git state</li>
+</ul>
+<p><code>to_prompt_context()</code> renders a structured plain-text prompt section. The VSCode runtime submits this text as the user input to the normal thread system.</p>
+<h2 id="statusstore"><a class="header" href="#statusstore">StatusStore</a></h2>
+<p><code>StatusStore</code> owns the current <code>CodebaseStatus</code> and retention limits.</p>
+<p>Public methods:</p>
+<div class="table-wrapper"><table><thead><tr><th>Method</th><th>Behavior</th></tr></thead><tbody>
+<tr><td><code>new(root)</code></td><td>Starts a status store for a workspace root.</td></tr>
+<tr><td><code>snapshot()</code></td><td>Returns the current status clone.</td></tr>
+<tr><td><code>report()</code></td><td>Builds a <code>StatusReport</code> from the current status.</td></tr>
+<tr><td><code>update_vscode_status(vscode)</code></td><td>Stores VSCode state, truncates recent file lists, resegments, reports.</td></tr>
+<tr><td><code>ingest_command_result(result)</code></td><td>Stores command result, caps history, resegments, reports.</td></tr>
+<tr><td><code>refresh_git_state()</code></td><td>Reads git state, resegments, reports.</td></tr>
+<tr><td><code>build_context_capsule(prompt)</code></td><td>Builds the model context capsule.</td></tr>
+</tbody></table>
+</div>
+<h2 id="segmentation-rules"><a class="header" href="#segmentation-rules">Segmentation Rules</a></h2>
+<p><code>segment_status</code> builds:</p>
+<ol>
+<li>A user-focus segment when there is an active editor.</li>
+<li>Diagnostic-cluster segments grouped by file.</li>
+<li>A recent-diff segment when dirty or untracked files exist.</li>
+<li>Command-failure or failing-test segments for recent failed commands.</li>
+<li>A risk segment for deleted files, lock/config changes, or broad change sets.</li>
+</ol>
+<p>Stuckness detection currently handles:</p>
+<ul>
+<li>repeated failure of the same normalized command</li>
+<li>three or more active VSCode error diagnostics</li>
+</ul>
+<h2 id="design-notes-2"><a class="header" href="#design-notes-2">Design Notes</a></h2>
+<p>The status engine is intentionally deterministic. It should explain why a segment exists through evidence labels and related ids, rather than relying on a model to infer state from raw editor dumps.</p>
+<p>The status crate does call git through subprocesses. That keeps implementation small, but git behavior should remain isolated behind <code>read_git_state</code> and parser helpers.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="persistence-crates"><a class="header" href="#persistence-crates">Persistence Crates</a></h1>
+<p>Persistence is split across three crates:</p>
+<ul>
+<li><code>rollout</code>: concrete JSONL session history.</li>
+<li><code>thread-store</code>: storage-neutral thread interface over rollout-style history.</li>
+<li><code>state-store</code>: local metadata and log appenders.</li>
+</ul>
+<h2 id="rollout"><a class="header" href="#rollout">Rollout</a></h2>
+<p><code>crates/rollout</code> writes and reads thread history as line-delimited JSON.</p>
+<p>Constants:</p>
+<ul>
+<li><code>SESSIONS_SUBDIR = "sessions"</code></li>
+<li><code>ARCHIVED_SESSIONS_SUBDIR = "archived_sessions"</code></li>
+</ul>
+<h3 id="rolloutconfig"><a class="header" href="#rolloutconfig">RolloutConfig</a></h3>
+<p><code>RolloutConfig</code> stores the root directory and derives:</p>
+<ul>
+<li><code>sessions_dir()</code></li>
+<li><code>archived_sessions_dir()</code></li>
+</ul>
+<p>The normal layout is:</p>
+<pre><code class="language-text">&lt;root&gt;/sessions/&lt;thread-id&gt;.jsonl
+&lt;root&gt;/archived_sessions/&lt;thread-id&gt;.jsonl
+</code></pre>
+<h3 id="rolloutrecorderparams"><a class="header" href="#rolloutrecorderparams">RolloutRecorderParams</a></h3>
+<p>Thread metadata used when opening a recorder:</p>
+<ul>
+<li>config</li>
+<li>thread id</li>
+<li>optional fork source</li>
+<li>cwd</li>
+<li>originator</li>
+<li>CLI version</li>
+<li>session source</li>
+<li>model provider</li>
+<li>dynamic tools</li>
+</ul>
+<h3 id="rolloutrecorder"><a class="header" href="#rolloutrecorder">RolloutRecorder</a></h3>
+<p><code>RolloutRecorder::new(params)</code>:</p>
+<ol>
+<li>Creates the sessions directory.</li>
+<li>Opens the thread JSONL file in append mode.</li>
+<li>Writes a <code>SessionMeta</code> line if the file is empty.</li>
+</ol>
+<p>Other methods:</p>
+<ul>
+<li><code>path()</code></li>
+<li><code>append_item(item)</code></li>
+<li><code>flush()</code></li>
+</ul>
+<h3 id="rollout-free-functions"><a class="header" href="#rollout-free-functions">Rollout Free Functions</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Function</th><th>Purpose</th></tr></thead><tbody>
+<tr><td><code>append_rollout_item_to_path</code></td><td>Append one <code>RolloutItem</code> to any JSONL path, creating parents.</td></tr>
+<tr><td><code>read_rollout_items</code></td><td>Read and parse non-empty JSONL lines into rollout items.</td></tr>
+<tr><td><code>get_threads_in_root</code></td><td>List session files, optionally including archived sessions.</td></tr>
+<tr><td><code>find_thread_path_by_id_str</code></td><td>Resolve a live session path by string id.</td></tr>
+<tr><td><code>find_archived_thread_path_by_id_str</code></td><td>Resolve an archived session path by string id.</td></tr>
+<tr><td><code>rollout_path_for_thread</code></td><td>Build the live session path for a <code>ThreadId</code>.</td></tr>
+</tbody></table>
+</div>
+<h2 id="thread-store"><a class="header" href="#thread-store">Thread Store</a></h2>
+<p><code>crates/thread-store</code> defines a persistence boundary for thread operations.</p>
+<h3 id="errors-and-results"><a class="header" href="#errors-and-results">Errors And Results</a></h3>
+<p><code>ThreadStoreError</code> includes:</p>
+<ul>
+<li><code>NotFound(ThreadId)</code></li>
+<li>IO errors</li>
+<li>rollout errors</li>
+</ul>
+<p><code>ThreadStoreResult&lt;T&gt;</code> aliases <code>Result&lt;T, ThreadStoreError&gt;</code>.</p>
+<h3 id="parameter-types"><a class="header" href="#parameter-types">Parameter Types</a></h3>
+<ul>
+<li><code>CreateThreadParams</code></li>
+<li><code>AppendThreadItemsParams</code></li>
+<li><code>ReadThreadParams</code></li>
+<li><code>LoadThreadHistoryParams</code></li>
+<li><code>ArchiveThreadParams</code></li>
+<li><code>ListThreadsParams</code></li>
+<li><code>ThreadMetadataPatch</code></li>
+<li><code>UpdateThreadMetadataParams</code></li>
+</ul>
+<h3 id="result-types"><a class="header" href="#result-types">Result Types</a></h3>
+<ul>
+<li><code>StoredThread</code></li>
+<li><code>StoredThreadHistory</code></li>
+<li><code>ThreadPage</code></li>
+</ul>
+<h3 id="threadstore-trait"><a class="header" href="#threadstore-trait">ThreadStore Trait</a></h3>
+<p>The interface:</p>
+<ul>
+<li><code>create_thread</code></li>
+<li><code>append_items</code></li>
+<li><code>read_thread</code></li>
+<li><code>load_history</code></li>
+<li><code>list_threads</code></li>
+<li><code>archive_thread</code></li>
+<li><code>update_metadata</code></li>
+</ul>
+<h3 id="localthreadstore"><a class="header" href="#localthreadstore">LocalThreadStore</a></h3>
+<p><code>LocalThreadStore</code> implements <code>ThreadStore</code> through rollout files.</p>
+<p>Implemented behavior:</p>
+<ul>
+<li>Creates session metadata with <code>RolloutRecorder</code>.</li>
+<li>Appends rollout items.</li>
+<li>Reads thread file existence.</li>
+<li>Loads rollout items and extracts response items.</li>
+<li>Lists sessions through <code>rollout::get_threads_in_root</code>.</li>
+<li>Archives by renaming the JSONL file into <code>archived_sessions</code>.</li>
+</ul>
+<p><code>update_metadata</code> currently returns <code>Ok(())</code> without modifying a file.</p>
+<h3 id="remotethreadstore"><a class="header" href="#remotethreadstore">RemoteThreadStore</a></h3>
+<p><code>RemoteThreadStore</code> is a stub. It returns <code>NotFound</code> for thread-specific operations and an empty page for <code>list_threads</code>.</p>
+<h3 id="threadrecorder"><a class="header" href="#threadrecorder">ThreadRecorder</a></h3>
+<p><code>ThreadRecorder</code> is a thin append helper around a <code>LocalThreadStore</code> and a fixed <code>ThreadId</code>.</p>
+<h2 id="state-store"><a class="header" href="#state-store">State Store</a></h2>
+<p><code>crates/state-store</code> is a local metadata/log shell. It currently writes JSONL files and a migrations marker.</p>
+<p>Constants:</p>
+<ul>
+<li><code>SQLITE_HOME_ENV = "LITE_CODE_STATE_HOME"</code></li>
+<li><code>STATE_DB_FILENAME = "state.jsonl"</code></li>
+<li><code>STATE_DB_VERSION = 1</code></li>
+<li><code>LOGS_DB_FILENAME = "logs.jsonl"</code></li>
+<li><code>LOGS_DB_VERSION = 1</code></li>
+</ul>
+<p>The <code>SQLITE_HOME_ENV</code> name is historical; the implementation is JSONL today.</p>
+<h3 id="stateruntime"><a class="header" href="#stateruntime">StateRuntime</a></h3>
+<p><code>StateRuntime</code> owns a root path.</p>
+<p>Methods:</p>
+<ul>
+<li><code>new(root)</code></li>
+<li><code>root()</code></li>
+<li><code>run_migrations()</code></li>
+<li><code>upsert_thread_metadata(metadata)</code></li>
+<li><code>append_log(entry)</code></li>
+</ul>
+<p><code>run_migrations</code> creates the root and writes <code>migrations.json</code> with state/log versions. Metadata and logs are appended as JSON lines.</p>
+<h3 id="metadata-and-logs"><a class="header" href="#metadata-and-logs">Metadata And Logs</a></h3>
+<p>Types:</p>
+<ul>
+<li><code>ThreadMetadata</code></li>
+<li><code>ThreadMetadataBuilder</code></li>
+<li><code>LogEntry</code></li>
+<li><code>LogQuery</code></li>
+<li><code>LogRow</code></li>
+</ul>
+<p>Path helpers:</p>
+<ul>
+<li><code>state_db_filename()</code></li>
+<li><code>logs_db_filename()</code></li>
+<li><code>state_db_path(root)</code></li>
+<li><code>logs_db_path(root)</code></li>
+</ul>
+<h2 id="design-notes-3"><a class="header" href="#design-notes-3">Design Notes</a></h2>
+<p>Rollout is the runtime-critical persistence path. <code>thread-store</code> and <code>state-store</code> define future direction, but the active kernel writes through <code>LocalHistoryStore</code> in <code>session-kernel</code>, which itself uses <code>rollout</code>.</p>
+<p>The long-term design should avoid two competing persistence APIs. Either the kernel should depend directly on <code>thread-store</code>, or <code>thread-store</code> should remain a higher-level API around rollout files for UI and management features.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="ui-bridge"><a class="header" href="#ui-bridge">UI Bridge</a></h1>
+<p><code>crates/ui-bridge</code> adapts protocol events and operations for CLI, web, and VSCode surfaces. It also defines the JSON envelopes used by the VSCode extension.</p>
+<h2 id="vscode-request-envelope"><a class="header" href="#vscode-request-envelope">VSCode Request Envelope</a></h2>
+<p><code>VscodeRequestEnvelope</code> contains:</p>
+<ul>
+<li><code>id: u64</code></li>
+<li>flattened <code>VscodeRequest</code></li>
+</ul>
+<p><code>VscodeRequest</code> variants:</p>
+<div class="table-wrapper"><table><thead><tr><th>Variant</th><th>Payload</th></tr></thead><tbody>
+<tr><td><code>Initialize</code></td><td>workspace root, optional model, optional max tokens</td></tr>
+<tr><td><code>StatusUpdate</code></td><td><code>VscodeStatus</code></td></tr>
+<tr><td><code>CommandResult</code></td><td><code>CommandResult</code></td></tr>
+<tr><td><code>UserPrompt</code></td><td>prompt plus optional <code>VscodeStatus</code></td></tr>
+<tr><td><code>Shutdown</code></td><td>no payload</td></tr>
+</tbody></table>
+</div>
+<p>These requests are sent as newline-delimited JSON over child-process stdio.</p>
+<h2 id="vscode-response-envelope"><a class="header" href="#vscode-response-envelope">VSCode Response Envelope</a></h2>
+<p><code>VscodeResponseEnvelope</code> contains:</p>
+<ul>
+<li>optional <code>id</code></li>
+<li>flattened <code>VscodeResponse</code></li>
+</ul>
+<p>Constructors:</p>
+<ul>
+<li><code>for_request(id, response)</code></li>
+<li><code>notification(response)</code></li>
+</ul>
+<p><code>VscodeResponse</code> variants:</p>
+<ul>
+<li><code>Ready</code></li>
+<li><code>StatusReport</code></li>
+<li><code>AgentEvent</code></li>
+<li><code>Complete</code></li>
+<li><code>Error</code></li>
+<li><code>ShutdownComplete</code></li>
+</ul>
+<p>The <code>Ready</code> response includes workspace root, model, synthetic-model flag, and initial status report.</p>
+<h2 id="vscode-runtime-events"><a class="header" href="#vscode-runtime-events">VSCode Runtime Events</a></h2>
+<p><code>VscodeRuntimeEvent</code> variants:</p>
+<ul>
+<li><code>Delta { text }</code></li>
+<li><code>AgentMessage { text }</code></li>
+<li><code>ToolStart { name, arguments }</code></li>
+<li><code>ToolEnd { name, output }</code></li>
+<li><code>TurnStarted { turn_id }</code></li>
+<li><code>TurnComplete { turn_id, summary }</code></li>
+<li><code>Error { message }</code></li>
+<li><code>Ignore</code></li>
+</ul>
+<p><code>event_to_vscode</code> maps kernel protocol events into these runtime events.</p>
+<h2 id="web-events"><a class="header" href="#web-events">Web Events</a></h2>
+<p><code>WebEvent</code> contains:</p>
+<ul>
+<li><code>event</code>: static event name</li>
+<li><code>data</code>: JSON payload</li>
+</ul>
+<p><code>event_to_web</code> maps:</p>
+<ul>
+<li><code>AgentMessageDelta</code> -&gt; <code>delta</code></li>
+<li><code>ToolCallBegin</code> -&gt; <code>tool_start</code></li>
+<li><code>ToolCallEnd</code> -&gt; <code>tool_end</code></li>
+<li><code>Error</code> -&gt; <code>error</code></li>
+<li><code>TurnComplete</code> -&gt; <code>done</code></li>
+<li><code>TurnAborted</code> -&gt; <code>error</code></li>
+</ul>
+<p>The web harness writes these as Server-Sent Events.</p>
+<h2 id="cli-events"><a class="header" href="#cli-events">CLI Events</a></h2>
+<p><code>CliEvent</code> variants:</p>
+<ul>
+<li><code>Print</code></li>
+<li><code>ToolStart</code></li>
+<li><code>ToolEnd</code></li>
+<li><code>Error</code></li>
+<li><code>Done</code></li>
+<li><code>Ignore</code></li>
+</ul>
+<p><code>event_to_cli</code> maps kernel events to terminal behavior. The CLI prints deltas to stdout, tool events to stderr, and stops a turn on <code>Done</code> or <code>Error</code>.</p>
+<h2 id="operation-helper"><a class="header" href="#operation-helper">Operation Helper</a></h2>
+<p><code>user_text_op(text)</code> creates a protocol <code>Op::UserInput</code> with one text item and no final JSON schema or client metadata.</p>
+<h2 id="design-notes-4"><a class="header" href="#design-notes-4">Design Notes</a></h2>
+<p>The bridge is intentionally shallow. It should map and format, not decide runtime behavior. Business logic belongs in <code>session-kernel</code>, <code>scheduler</code>, or <code>status</code>.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="binary-cli-web-and-vscode-stdio"><a class="header" href="#binary-cli-web-and-vscode-stdio">Binary, CLI, Web, And VSCode Stdio</a></h1>
+<p>The root binary crate composes all runtime pieces and exposes three execution modes.</p>
+<h2 id="srcmainrs"><a class="header" href="#srcmainrs"><code>src/main.rs</code></a></h2>
+<p>Modules:</p>
+<ul>
+<li><code>tools</code></li>
+<li><code>vscode</code></li>
+<li><code>web</code></li>
+</ul>
+<p>Main responsibilities:</p>
+<ul>
+<li>Parse CLI flags.</li>
+<li>Select VSCode stdio, web, or CLI mode.</li>
+<li>Read <code>OPENROUTER_API_KEY</code> for CLI and web modes.</li>
+<li>Build <code>OpenAiScheduler</code>, <code>LocalToolExecutor</code>, and <code>ThreadManager</code>.</li>
+<li>Start a thread with local tool definitions.</li>
+<li>Consume runtime events and adapt them for the selected UI.</li>
+</ul>
+<h3 id="cli-flags"><a class="header" href="#cli-flags">CLI Flags</a></h3>
+<p><code>Cli</code> fields:</p>
+<ul>
+<li><code>--web</code>: launch web UI instead of CLI mode.</li>
+<li><code>--vscode-stdio</code>: run the VSCode extension JSON stdio bridge.</li>
+<li><code>--model</code>, <code>-m</code>: model name, default <code>nvidia/nemotron-3-super-120b-a12b:free</code>.</li>
+<li><code>--max-tokens</code>: maximum tokens per response, default <code>4096</code>.</li>
+</ul>
+<h3 id="system-prompt"><a class="header" href="#system-prompt">System Prompt</a></h3>
+<p><code>SYSTEM_PROMPT</code> tells the model it is a coding assistant inside the user's project directory, with tools for shell, read/write/edit, directory listing, and search. It asks the model to inspect real project contents, prefer targeted edits, verify progress, and summarize briefly.</p>
+<h3 id="runtime-config"><a class="header" href="#runtime-config">Runtime Config</a></h3>
+<p><code>runtime_config(cli, history_root)</code> builds <code>SessionConfig</code>:</p>
+<ul>
+<li>model from CLI</li>
+<li>cwd from current directory</li>
+<li>system prompt from <code>SYSTEM_PROMPT</code></li>
+<li>max tokens from CLI</li>
+<li>history root from <code>.lite-code</code></li>
+</ul>
+<h2 id="cli-mode"><a class="header" href="#cli-mode">CLI Mode</a></h2>
+<p>Flow:</p>
+<ol>
+<li>Require <code>OPENROUTER_API_KEY</code>.</li>
+<li>Start an OpenRouter scheduler.</li>
+<li>Start a thread with local dynamic tools.</li>
+<li>Read stdin lines.</li>
+<li>Submit each line as text input.</li>
+<li>Print streamed deltas, tool logs, errors, and completion.</li>
+</ol>
+<p>Typing <code>exit</code> ends the loop.</p>
+<h2 id="srcwebrs"><a class="header" href="#srcwebrs"><code>src/web.rs</code></a></h2>
+<p>The web harness uses Axum.</p>
+<p>Routes:</p>
+<ul>
+<li><code>GET /</code>: serves <code>static/index.html</code>.</li>
+<li><code>POST /api/chat</code>: accepts JSON messages and returns SSE.</li>
+</ul>
+<p><code>AppState</code> contains:</p>
+<ul>
+<li><code>ThreadManager</code></li>
+<li>history root</li>
+<li>model</li>
+<li>max tokens</li>
+</ul>
+<p><code>run_thread_loop</code>:</p>
+<ol>
+<li>Validates latest user message.</li>
+<li>Starts a new web thread.</li>
+<li>Converts prior web messages into <code>ResponseItem</code> history.</li>
+<li>Injects history into the thread.</li>
+<li>Submits latest user text.</li>
+<li>Converts runtime events through <code>event_to_web</code>.</li>
+<li>Sends <code>[DONE]</code> at the end.</li>
+</ol>
+<p><code>start_web_thread</code> sets <code>SessionSource::Web</code> and uses the root system prompt.</p>
+<h2 id="srcvscoders"><a class="header" href="#srcvscoders"><code>src/vscode.rs</code></a></h2>
+<p>The VSCode stdio server is the product runtime surface.</p>
+<h3 id="public-entrypoint"><a class="header" href="#public-entrypoint">Public Entrypoint</a></h3>
+<p><code>serve_stdio(default_model, default_max_tokens)</code>:</p>
+<ul>
+<li>Reads lines from stdin.</li>
+<li>Parses <code>VscodeRequestEnvelope</code>.</li>
+<li>Sends an error notification for invalid JSON.</li>
+<li>Dispatches to <code>VscodeServer::handle_request</code>.</li>
+<li>Writes one JSON response per line to stdout.</li>
+</ul>
+<h3 id="vscodeserver-state"><a class="header" href="#vscodeserver-state">VscodeServer State</a></h3>
+<p>Fields:</p>
+<ul>
+<li>workspace root</li>
+<li><code>StatusStore</code></li>
+<li>optional <code>ThreadManager</code></li>
+<li>model</li>
+<li>max tokens</li>
+<li>synthetic-model flag</li>
+</ul>
+<h3 id="request-handling"><a class="header" href="#request-handling">Request Handling</a></h3>
+<p><code>Initialize</code>:</p>
+<ul>
+<li>Sets workspace root, model, and max tokens.</li>
+<li>Creates a new <code>StatusStore</code>.</li>
+<li>Uses <code>OpenAiScheduler</code> if <code>OPENROUTER_API_KEY</code> is set.</li>
+<li>Uses <code>SyntheticScheduler</code> otherwise.</li>
+<li>Creates a <code>ThreadManager</code>.</li>
+<li>Returns <code>Ready</code>.</li>
+</ul>
+<p><code>StatusUpdate</code>:</p>
+<ul>
+<li>Updates VSCode status.</li>
+<li>Refreshes git state.</li>
+<li>Returns <code>StatusReport</code>.</li>
+</ul>
+<p><code>CommandResult</code>:</p>
+<ul>
+<li>Ingests command result.</li>
+<li>Refreshes git state.</li>
+<li>Returns <code>StatusReport</code>.</li>
+</ul>
+<p><code>UserPrompt</code>:</p>
+<ul>
+<li>Optionally updates status.</li>
+<li>Builds a context capsule.</li>
+<li>Starts a new thread with tools.</li>
+<li>Submits the capsule text.</li>
+<li>Streams mapped runtime events as <code>AgentEvent</code>.</li>
+<li>Refreshes status and returns <code>Complete</code>.</li>
+</ul>
+<p><code>Shutdown</code>:</p>
+<ul>
+<li>Returns <code>ShutdownComplete</code>.</li>
+<li>Stops the stdio loop.</li>
+</ul>
+<h3 id="vscode-system-prompt"><a class="header" href="#vscode-system-prompt">VSCode System Prompt</a></h3>
+<p><code>VSCODE_SYSTEM_PROMPT</code> tells the model to treat VSCode status as data, pay attention to active editor, cursor, diagnostics, command failures, and git state, and to be cautious with risky edits.</p>
+<h2 id="design-notes-5"><a class="header" href="#design-notes-5">Design Notes</a></h2>
+<p>The binary crate is currently the composition root and tool owner. That is acceptable for the current size, but moving <code>src/tools.rs</code> into a tool-gateway crate would make the runtime boundary cleaner.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="local-tool-gateway"><a class="header" href="#local-tool-gateway">Local Tool Gateway</a></h1>
+<p><code>src/tools.rs</code> implements the current local tool executor and dynamic tool schema list. It is not a separate crate yet, but it is a major runtime interface because model tool calls pass through it.</p>
+<h2 id="public-types-and-functions"><a class="header" href="#public-types-and-functions">Public Types And Functions</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Item</th><th>Purpose</th></tr></thead><tbody>
+<tr><td><code>ToolResult</code></td><td>Internal result wrapper with <code>output: String</code>.</td></tr>
+<tr><td><code>LocalToolExecutor</code></td><td>Implements <code>session_kernel::ToolExecutor</code>.</td></tr>
+<tr><td><code>tool_definitions()</code></td><td>Returns dynamic JSON schemas for all exposed tools.</td></tr>
+<tr><td><code>execute_tool(name, input)</code></td><td>Dispatches tool execution by name.</td></tr>
+</tbody></table>
+</div>
+<h2 id="constants"><a class="header" href="#constants">Constants</a></h2>
+<ul>
+<li><code>MAX_OUTPUT_LEN = 10_000</code></li>
+<li><code>MAX_SEARCH_MATCHES = 100</code></li>
+<li><code>MAX_FIND_RESULTS = 200</code></li>
+<li><code>MAX_WALK_DEPTH = 20</code></li>
+<li><code>SKIP_DIRS</code>: <code>.git</code>, <code>node_modules</code>, <code>target</code>, cache/build directories, and similar non-source directories.</li>
+</ul>
+<h2 id="exposed-tools"><a class="header" href="#exposed-tools">Exposed Tools</a></h2>
+<h3 id="shell"><a class="header" href="#shell"><code>shell</code></a></h3>
+<p>Runs a shell command in the current working directory.</p>
+<p>Parameters:</p>
+<ul>
+<li><code>command: string</code></li>
+</ul>
+<p>Behavior:</p>
+<ul>
+<li>On Windows, tries PowerShell first, then <code>cmd /C</code>.</li>
+<li>On other platforms, runs <code>sh -c</code>.</li>
+<li>Combines stdout and stderr.</li>
+<li>Returns exit code text if output is empty.</li>
+<li>Truncates long output.</li>
+</ul>
+<p>Design note: this tool has broad local execution power. Policy and approval should eventually live in a dedicated tool gateway.</p>
+<h3 id="write_file"><a class="header" href="#write_file"><code>write_file</code></a></h3>
+<p>Writes content to a file, creating parent directories when needed.</p>
+<p>Parameters:</p>
+<ul>
+<li><code>path: string</code></li>
+<li><code>content: string</code></li>
+</ul>
+<p>Behavior:</p>
+<ul>
+<li>Overwrites existing files.</li>
+<li>Returns byte count or error text.</li>
+</ul>
+<h3 id="read_file"><a class="header" href="#read_file"><code>read_file</code></a></h3>
+<p>Reads a UTF-8 text file with line numbers.</p>
+<p>Parameters:</p>
+<ul>
+<li><code>path: string</code></li>
+<li>optional <code>offset: integer</code></li>
+<li>optional <code>limit: integer</code></li>
+</ul>
+<p>Behavior:</p>
+<ul>
+<li>Detects binary content by looking for null bytes in the first 8192 bytes.</li>
+<li>Rejects invalid UTF-8.</li>
+<li>Supports 1-based line offsets.</li>
+<li>Truncates output.</li>
+</ul>
+<h3 id="edit_file"><a class="header" href="#edit_file"><code>edit_file</code></a></h3>
+<p>Replaces an exact string with new content.</p>
+<p>Parameters:</p>
+<ul>
+<li><code>path: string</code></li>
+<li><code>old_string: string</code></li>
+<li><code>new_string: string</code></li>
+</ul>
+<p>Behavior:</p>
+<ul>
+<li>Rejects empty old strings.</li>
+<li>Rejects no-op replacements.</li>
+<li>Requires exactly one match.</li>
+<li>Writes the modified file.</li>
+</ul>
+<p>This is the preferred targeted edit tool from the system prompt.</p>
+<h3 id="list_directory"><a class="header" href="#list_directory"><code>list_directory</code></a></h3>
+<p>Lists one directory.</p>
+<p>Parameters:</p>
+<ul>
+<li>optional <code>path: string</code>, default <code>.</code></li>
+</ul>
+<p>Behavior:</p>
+<ul>
+<li>Appends <code>/</code> to directories.</li>
+<li>Shows file sizes for files.</li>
+<li>Sorts results.</li>
+</ul>
+<h3 id="search_files"><a class="header" href="#search_files"><code>search_files</code></a></h3>
+<p>Recursively searches text files.</p>
+<p>Parameters:</p>
+<ul>
+<li><code>pattern: string</code></li>
+<li>optional <code>path: string</code>, default <code>.</code></li>
+<li>optional <code>regex: boolean</code></li>
+<li>optional <code>include: string</code> file-name glob</li>
+</ul>
+<p>Behavior:</p>
+<ul>
+<li>Skips common non-source directories.</li>
+<li>Supports literal search or regex search.</li>
+<li>Applies include glob to file names.</li>
+<li>Stops collecting after configured match limits.</li>
+<li>Skips unreadable or non-UTF-8 files.</li>
+</ul>
+<h3 id="find_files"><a class="header" href="#find_files"><code>find_files</code></a></h3>
+<p>Finds paths with a glob pattern.</p>
+<p>Parameters:</p>
+<ul>
+<li><code>pattern: string</code></li>
+<li>optional <code>path: string</code>, default <code>.</code></li>
+</ul>
+<p>Behavior:</p>
+<ul>
+<li>Joins <code>path</code> and <code>pattern</code>.</li>
+<li>Uses the <code>glob</code> crate.</li>
+<li>Limits result count.</li>
+</ul>
+<h2 id="helper-functions"><a class="header" href="#helper-functions">Helper Functions</a></h2>
+<ul>
+<li><code>truncate_output</code></li>
+<li><code>parse_usize_param</code></li>
+<li><code>parse_bool_param</code></li>
+<li><code>tool</code></li>
+<li><code>walk_files</code></li>
+</ul>
+<p>The parsers accept both JSON primitives and stringified values where useful. This makes tool execution more robust against imperfect model arguments.</p>
+<h2 id="design-notes-6"><a class="header" href="#design-notes-6">Design Notes</a></h2>
+<p>The current implementation values simplicity over policy. It should be considered a development tool gateway, not a final security boundary.</p>
+<p>Recommended future direction:</p>
+<ul>
+<li>Move tools into a crate with explicit policy and tracing.</li>
+<li>Return structured status in addition to text output.</li>
+<li>Persist tool call records as response items or trace events.</li>
+<li>Separate read-only tools from mutating and shell tools.</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="vscode-extension"><a class="header" href="#vscode-extension">VSCode Extension</a></h1>
+<p><code>apps/vscode-extension</code> is the primary product shell for Marvis. It collects IDE state, starts the Rust runtime, renders status and trace information, and exposes user commands.</p>
+<h2 id="files"><a class="header" href="#files">Files</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>File</th><th>Purpose</th></tr></thead><tbody>
+<tr><td><code>package.json</code></td><td>VSCode contribution manifest, commands, configuration, activation events, and check script.</td></tr>
+<tr><td><code>extension.js</code></td><td>Extension implementation.</td></tr>
+<tr><td><code>README.md</code></td><td>Development instructions for launching the extension.</td></tr>
+</tbody></table>
+</div>
+<h2 id="commands"><a class="header" href="#commands">Commands</a></h2>
+<p>The extension contributes:</p>
+<ul>
+<li><code>Marvis: Start Marvis</code></li>
+<li><code>Marvis: Show Status</code></li>
+<li><code>Marvis: Refresh Status</code></li>
+<li><code>Marvis: Ask Marvis</code></li>
+<li><code>Marvis: Ask About Selection</code></li>
+<li><code>Marvis: Fix Near Cursor</code></li>
+<li><code>Marvis: Explain Diagnostic</code></li>
+<li><code>Marvis: Record Terminal Failure</code></li>
+<li><code>Marvis: Run Command and Record Result</code></li>
+<li><code>Marvis: Run VSCode Task and Record Result</code></li>
+</ul>
+<p>The editor context menu includes ask-about-selection and fix-near-cursor.</p>
+<h2 id="configuration"><a class="header" href="#configuration">Configuration</a></h2>
+<p>Settings:</p>
+<div class="table-wrapper"><table><thead><tr><th>Setting</th><th>Default</th><th>Meaning</th></tr></thead><tbody>
+<tr><td><code>marvis.runtimePath</code></td><td>empty</td><td>Optional path to the <code>lite-code</code> binary.</td></tr>
+<tr><td><code>marvis.model</code></td><td><code>nvidia/nemotron-3-super-120b-a12b:free</code></td><td>Model passed to the Rust runtime.</td></tr>
+<tr><td><code>marvis.maxTokens</code></td><td><code>4096</code></td><td>Maximum response tokens per model turn.</td></tr>
+</tbody></table>
+</div>
+<h2 id="activation"><a class="header" href="#activation">Activation</a></h2>
+<p>The extension activates on startup and on each Marvis command. <code>activate(context)</code> creates:</p>
+<ul>
+<li>a <code>Marvis</code> output channel</li>
+<li>one <code>MarvisController</code></li>
+<li>command registrations</li>
+<li>a quick-fix code action provider</li>
+</ul>
+<p><code>deactivate()</code> disposes the active controller.</p>
+<h2 id="marviscontroller"><a class="header" href="#marviscontroller">MarvisController</a></h2>
+<p><code>MarvisController</code> is the main extension coordinator.</p>
+<p>State:</p>
+<ul>
+<li>extension context</li>
+<li>output channel</li>
+<li>runtime client</li>
+<li>status webview panel</li>
+<li>last status report</li>
+<li>last raw status</li>
+<li>debounce timer</li>
+<li>recent opened/saved files</li>
+<li>command results</li>
+<li>running task map</li>
+<li>debug session map</li>
+<li>agent log</li>
+</ul>
+<p>Major methods:</p>
+<div class="table-wrapper"><table><thead><tr><th>Method</th><th>Purpose</th></tr></thead><tbody>
+<tr><td><code>watchWorkspace</code></td><td>Registers listeners for editor, diagnostics, save, task, and debug changes.</td></tr>
+<tr><td><code>start</code></td><td>Ensures runtime, refreshes status, and shows the panel.</td></tr>
+<tr><td><code>showStatus</code></td><td>Creates or reveals the webview panel.</td></tr>
+<tr><td><code>refreshStatus</code></td><td>Collects status and sends <code>status_update</code>.</td></tr>
+<tr><td><code>ask</code></td><td>Prompts the user for a request.</td></tr>
+<tr><td><code>askAboutSelection</code></td><td>Builds a prompt around selected code or cursor context.</td></tr>
+<tr><td><code>fixNearCursor</code></td><td>Confirms and asks Marvis to inspect and fix nearby issues.</td></tr>
+<tr><td><code>explainDiagnostic</code></td><td>Builds a prompt from a diagnostic.</td></tr>
+<tr><td><code>recordTerminalFailure</code></td><td>Manually records a failed command and output tail.</td></tr>
+<tr><td><code>runCommandAndRecord</code></td><td>Runs a shell command from workspace root and records result.</td></tr>
+<tr><td><code>runTaskAndRecord</code></td><td>Runs a VSCode task and records exit status.</td></tr>
+<tr><td><code>runPrompt</code></td><td>Sends <code>user_prompt</code> with current status and handles streamed events.</td></tr>
+<tr><td><code>sendCommandResult</code></td><td>Sends command result to runtime if available.</td></tr>
+<tr><td><code>ensureClient</code></td><td>Starts and initializes the Rust runtime.</td></tr>
+<tr><td><code>collectStatus</code></td><td>Builds the <code>VscodeStatus</code> JSON payload.</td></tr>
+<tr><td><code>scheduleStatusRefresh</code></td><td>Debounces status refresh after workspace changes.</td></tr>
+<tr><td><code>updatePanel</code></td><td>Sends current state to the webview.</td></tr>
+</tbody></table>
+</div>
+<h2 id="runtimeclient"><a class="header" href="#runtimeclient">RuntimeClient</a></h2>
+<p><code>RuntimeClient</code> owns the child process and request/response correlation.</p>
+<p>Fields:</p>
+<ul>
+<li>runtime command, args, cwd</li>
+<li>output channel</li>
+<li>message callback</li>
+<li>child process</li>
+<li>next request id</li>
+<li>pending request map</li>
+<li>stdout buffer</li>
+</ul>
+<p>Behavior:</p>
+<ul>
+<li><code>start()</code> spawns the runtime with piped stdio.</li>
+<li><code>request(type, payload, terminalTypes, timeoutMs)</code> writes one JSON line and waits for a terminal response type.</li>
+<li><code>handleStdout(text)</code> buffers newline-delimited JSON, dispatches messages, and resolves pending requests.</li>
+<li><code>rejectAll(error)</code> rejects every pending request.</li>
+<li><code>dispose()</code> writes a shutdown request, then kills the process after 500 ms if needed.</li>
+</ul>
+<p>This client treats stdout as protocol JSON and stderr as diagnostic output.</p>
+<h2 id="code-actions"><a class="header" href="#code-actions">Code Actions</a></h2>
+<p><code>MarvisCodeActionProvider</code> creates two quick fixes for diagnostics:</p>
+<ul>
+<li>ask Marvis to explain this diagnostic</li>
+<li>ask Marvis to fix near this diagnostic</li>
+</ul>
+<h2 id="status-collection"><a class="header" href="#status-collection">Status Collection</a></h2>
+<p>Helpers:</p>
+<ul>
+<li><code>collectOpenEditors</code></li>
+<li><code>collectDiagnostics</code></li>
+<li><code>editorRef</code></li>
+<li><code>cursorContextFor</code></li>
+<li><code>position</code></li>
+<li><code>textRange</code></li>
+<li><code>severity</code></li>
+<li><code>selectedText</code></li>
+<li><code>taskKind</code></li>
+<li><code>rangeLabel</code></li>
+<li><code>isPathInside</code></li>
+<li><code>truncate</code></li>
+<li><code>truncateTail</code></li>
+</ul>
+<p><code>collectStatus</code> sends active editor, open editors, visible ranges, selections, cursor bubble, recent files, diagnostics, terminal-like command results, running tasks, debug sessions, trust state, remote name, and VSCode app/profile name.</p>
+<h2 id="webview-panel"><a class="header" href="#webview-panel">Webview Panel</a></h2>
+<p><code>renderPanelHtml()</code> returns a self-contained HTML document with:</p>
+<ul>
+<li>toolbar buttons for ask, refresh, run command, record failure</li>
+<li>status summary section</li>
+<li>active segments section</li>
+<li>suggestion section</li>
+<li>trace log section</li>
+</ul>
+<p>The panel uses VSCode theme variables and receives state through <code>postMessage</code>.</p>
+<h2 id="runtime-resolution"><a class="header" href="#runtime-resolution">Runtime Resolution</a></h2>
+<p><code>resolveRuntime(context, workspaceRoot)</code> chooses:</p>
+<ol>
+<li>Configured <code>marvis.runtimePath</code> with <code>--vscode-stdio</code>.</li>
+<li><code>target/debug/lite-code</code> from the repo root.</li>
+<li><code>cargo run --quiet -- --vscode-stdio</code> from the repo root.</li>
+</ol>
+<h2 id="design-notes-7"><a class="header" href="#design-notes-7">Design Notes</a></h2>
+<p>The extension is intentionally thin with respect to agent behavior. It gathers high-quality IDE state and sends typed requests. Rust decides how to segment state, build the prompt context, run the model, and execute tools.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="configuration-and-data-locations"><a class="header" href="#configuration-and-data-locations">Configuration And Data Locations</a></h1>
+<h2 id="environment-variables"><a class="header" href="#environment-variables">Environment Variables</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Variable</th><th>Used by</th><th>Meaning</th></tr></thead><tbody>
+<tr><td><code>OPENROUTER_API_KEY</code></td><td>CLI, web, VSCode runtime</td><td>API key for OpenRouter/OpenAI-compatible requests. Required for CLI and web modes. Optional for VSCode, which falls back to synthetic scheduling.</td></tr>
+<tr><td><code>LITE_CODE_STATE_HOME</code></td><td><code>state-store</code> constant</td><td>Intended state root override. The current implementation exposes the constant but does not wire global discovery through it.</td></tr>
+</tbody></table>
+</div>
+<h2 id="cli-flags-1"><a class="header" href="#cli-flags-1">CLI Flags</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Flag</th><th>Meaning</th></tr></thead><tbody>
+<tr><td><code>--web</code></td><td>Start the Axum web harness on <code>0.0.0.0:3000</code>.</td></tr>
+<tr><td><code>--vscode-stdio</code></td><td>Start the JSON stdio server for the VSCode extension.</td></tr>
+<tr><td><code>--model</code>, <code>-m</code></td><td>Select the model name.</td></tr>
+<tr><td><code>--max-tokens</code></td><td>Select maximum response tokens.</td></tr>
+</tbody></table>
+</div>
+<h2 id="vscode-settings"><a class="header" href="#vscode-settings">VSCode Settings</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Setting</th><th>Meaning</th></tr></thead><tbody>
+<tr><td><code>marvis.runtimePath</code></td><td>Absolute or workspace-relative binary path to run instead of auto-detected runtime.</td></tr>
+<tr><td><code>marvis.model</code></td><td>Model passed to <code>Initialize</code>.</td></tr>
+<tr><td><code>marvis.maxTokens</code></td><td>Max tokens passed to <code>Initialize</code>.</td></tr>
+</tbody></table>
+</div>
+<h2 id="runtime-data"><a class="header" href="#runtime-data">Runtime Data</a></h2>
+<h3 id="thread-rollouts"><a class="header" href="#thread-rollouts">Thread Rollouts</a></h3>
+<p>The binary and VSCode runtime use a <code>.lite-code</code> directory under the current workspace root.</p>
+<pre><code class="language-text">.lite-code/sessions/&lt;thread-id&gt;.jsonl
+.lite-code/archived_sessions/&lt;thread-id&gt;.jsonl
+</code></pre>
+<p>Each JSONL line is a <code>protocol::RolloutItem</code>.</p>
+<h3 id="state-store-1"><a class="header" href="#state-store-1">State Store</a></h3>
+<p><code>StateRuntime</code> writes:</p>
+<pre><code class="language-text">&lt;root&gt;/migrations.json
+&lt;root&gt;/state.jsonl
+&lt;root&gt;/logs.jsonl
+</code></pre>
+<p>This store is not yet the primary thread history path.</p>
+<h2 id="network-behavior"><a class="header" href="#network-behavior">Network Behavior</a></h2>
+<p>CLI and web modes require a live OpenRouter key and create <code>OpenAiScheduler</code>. VSCode stdio mode creates:</p>
+<ul>
+<li><code>OpenAiScheduler</code> when <code>OPENROUTER_API_KEY</code> is present and non-empty.</li>
+<li><code>SyntheticScheduler</code> otherwise.</li>
+</ul>
+<h2 id="ports"><a class="header" href="#ports">Ports</a></h2>
+<p>The web harness binds:</p>
+<pre><code class="language-text">0.0.0.0:3000
+</code></pre>
+<p>There is no dynamic port fallback in the current implementation.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="build-test-and-documentation"><a class="header" href="#build-test-and-documentation">Build, Test, And Documentation</a></h1>
+<h2 id="rust-build"><a class="header" href="#rust-build">Rust Build</a></h2>
+<p>From the workspace root:</p>
+<pre><code class="language-bash">cargo build
+</code></pre>
+<p>Release build:</p>
+<pre><code class="language-bash">cargo build --release
+</code></pre>
+<h2 id="rust-tests"><a class="header" href="#rust-tests">Rust Tests</a></h2>
+<p>Run the workspace tests:</p>
+<pre><code class="language-bash">cargo test --workspace
+</code></pre>
+<p>Focused examples:</p>
+<pre><code class="language-bash">cargo test -p protocol
+cargo test -p session-kernel
+cargo test -p status
+</code></pre>
+<h2 id="vscode-extension-check"><a class="header" href="#vscode-extension-check">VSCode Extension Check</a></h2>
+<p>From <code>apps/vscode-extension</code>:</p>
+<pre><code class="language-bash">npm run check
+</code></pre>
+<p>The check script runs:</p>
+<pre><code class="language-bash">node --check extension.js
+</code></pre>
+<h2 id="documentation-source"><a class="header" href="#documentation-source">Documentation Source</a></h2>
+<p>The documentation source is in:</p>
+<pre><code class="language-text">docs/src
+</code></pre>
+<p>The mdBook config is:</p>
+<pre><code class="language-text">docs/book.toml
+</code></pre>
+<h2 id="build-documentation"><a class="header" href="#build-documentation">Build Documentation</a></h2>
+<p>The local mdBook install used for this repo lives under <code>target/mdbook-bin</code>.</p>
+<pre><code class="language-bash">target/mdbook-bin/bin/mdbook build docs
+</code></pre>
+<p>Output:</p>
+<pre><code class="language-text">docs/site
+</code></pre>
+<p>Open:</p>
+<pre><code class="language-text">docs/site/index.html
+</code></pre>
+<h2 id="documentation-quality-checks"><a class="header" href="#documentation-quality-checks">Documentation Quality Checks</a></h2>
+<p>Before publishing, run:</p>
+<pre><code class="language-bash">target/mdbook-bin/bin/mdbook build docs
+cargo test --workspace
+npm --prefix apps/vscode-extension run check
+</code></pre>
+<p>Review at least:</p>
+<ul>
+<li>landing page</li>
+<li>architecture page</li>
+<li>each crate page</li>
+<li>interface reference</li>
+<li>generated search index</li>
+</ul>
+<h2 id="publication-checklist"><a class="header" href="#publication-checklist">Publication Checklist</a></h2>
+<ul>
+<li>Every workspace crate has a design page.</li>
+<li>Every runtime entrypoint is documented.</li>
+<li>Every public cross-crate trait is documented.</li>
+<li>JSON process messages are documented.</li>
+<li>Runtime flows are documented.</li>
+<li>Data locations and build commands are documented.</li>
+<li>Generated HTML builds without mdBook warnings.</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="module-index"><a class="header" href="#module-index">Module Index</a></h1>
+<p>This index lists every source module and its design responsibility.</p>
+<h2 id="root-binary-crate"><a class="header" href="#root-binary-crate">Root Binary Crate</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>File</th><th>Responsibility</th></tr></thead><tbody>
+<tr><td><code>src/main.rs</code></td><td>Binary entrypoint, CLI parsing, mode selection, runtime composition, CLI loop, shared system prompt.</td></tr>
+<tr><td><code>src/web.rs</code></td><td>Axum web harness, static HTML serving, chat endpoint, SSE event stream, web thread setup.</td></tr>
+<tr><td><code>src/vscode.rs</code></td><td>VSCode stdio server, request dispatch, status store integration, context capsule submission, streamed VSCode events.</td></tr>
+<tr><td><code>src/tools.rs</code></td><td>Dynamic local tool definitions and executor implementation.</td></tr>
+<tr><td><code>static/index.html</code></td><td>Temporary web harness frontend bundled into <code>src/web.rs</code>.</td></tr>
+</tbody></table>
+</div>
+<h2 id="vscode-application"><a class="header" href="#vscode-application">VSCode Application</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>File</th><th>Responsibility</th></tr></thead><tbody>
+<tr><td><code>apps/vscode-extension/package.json</code></td><td>Extension manifest, activation events, commands, menus, settings, scripts.</td></tr>
+<tr><td><code>apps/vscode-extension/extension.js</code></td><td>Extension controller, runtime child process client, status collection, webview panel, code actions.</td></tr>
+<tr><td><code>apps/vscode-extension/README.md</code></td><td>Development launch guide.</td></tr>
+</tbody></table>
+</div>
+<h2 id="cratesprotocol"><a class="header" href="#cratesprotocol"><code>crates/protocol</code></a></h2>
+<div class="table-wrapper"><table><thead><tr><th>File</th><th>Responsibility</th></tr></thead><tbody>
+<tr><td><code>crates/protocol/src/lib.rs</code></td><td>Operations, inputs, response items, events, metadata, rollout item enum, compatibility re-exports.</td></tr>
+<tr><td><code>crates/protocol/src/thread_id.rs</code></td><td>Thread id generation, validation, display, conversion, and serde.</td></tr>
+</tbody></table>
+</div>
+<h2 id="cratessession-kernel"><a class="header" href="#cratessession-kernel"><code>crates/session-kernel</code></a></h2>
+<div class="table-wrapper"><table><thead><tr><th>File</th><th>Responsibility</th></tr></thead><tbody>
+<tr><td><code>crates/session-kernel/src/lib.rs</code></td><td>Runtime errors, config, traits, thread manager, thread handle, event emitter, cancellation, submission loop, history store.</td></tr>
+</tbody></table>
+</div>
+<h2 id="cratesscheduler"><a class="header" href="#cratesscheduler"><code>crates/scheduler</code></a></h2>
+<div class="table-wrapper"><table><thead><tr><th>File</th><th>Responsibility</th></tr></thead><tbody>
+<tr><td><code>crates/scheduler/src/lib.rs</code></td><td>OpenAI-compatible scheduler, synthetic scheduler, dynamic tool conversion, response history conversion.</td></tr>
+</tbody></table>
+</div>
+<h2 id="cratesopenai-rs"><a class="header" href="#cratesopenai-rs"><code>crates/openai-rs</code></a></h2>
+<div class="table-wrapper"><table><thead><tr><th>File</th><th>Responsibility</th></tr></thead><tbody>
+<tr><td><code>crates/openai-rs/src/lib.rs</code></td><td>Module declarations and top-level re-exports.</td></tr>
+<tr><td><code>crates/openai-rs/src/auth.rs</code></td><td>Auth provider abstraction and bearer auth.</td></tr>
+<tr><td><code>crates/openai-rs/src/client.rs</code></td><td>Client builder and chat namespace access.</td></tr>
+<tr><td><code>crates/openai-rs/src/provider.rs</code></td><td>Provider URL construction, headers, retry config, stream timeout.</td></tr>
+<tr><td><code>crates/openai-rs/src/request.rs</code></td><td>Transport-neutral request and response types.</td></tr>
+<tr><td><code>crates/openai-rs/src/transport.rs</code></td><td>HTTP transport trait and reqwest transport.</td></tr>
+<tr><td><code>crates/openai-rs/src/retry.rs</code></td><td>Retry predicates and backoff.</td></tr>
+<tr><td><code>crates/openai-rs/src/sse.rs</code></td><td>SSE stream decoding task.</td></tr>
+<tr><td><code>crates/openai-rs/src/error.rs</code></td><td>Transport, stream, and API errors.</td></tr>
+<tr><td><code>crates/openai-rs/src/chat/mod.rs</code></td><td>Chat namespace.</td></tr>
+<tr><td><code>crates/openai-rs/src/chat/completions.rs</code></td><td>Streaming and non-streaming chat completions.</td></tr>
+<tr><td><code>crates/openai-rs/src/types/mod.rs</code></td><td>Type module re-exports.</td></tr>
+<tr><td><code>crates/openai-rs/src/types/chat.rs</code></td><td>Chat request, messages, roles, tool calls, responses.</td></tr>
+<tr><td><code>crates/openai-rs/src/types/common.rs</code></td><td>Tool definitions, function definitions, usage, finish reasons.</td></tr>
+<tr><td><code>crates/openai-rs/src/types/stream.rs</code></td><td>Streaming response chunks and deltas.</td></tr>
+</tbody></table>
+</div>
+<h2 id="cratesstatus"><a class="header" href="#cratesstatus"><code>crates/status</code></a></h2>
+<div class="table-wrapper"><table><thead><tr><th>File</th><th>Responsibility</th></tr></thead><tbody>
+<tr><td><code>crates/status/src/lib.rs</code></td><td>Workspace status model, VSCode status model, git parsing, segmentation, stuckness detection, context capsules.</td></tr>
+</tbody></table>
+</div>
+<h2 id="persistence"><a class="header" href="#persistence">Persistence</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>File</th><th>Responsibility</th></tr></thead><tbody>
+<tr><td><code>crates/rollout/src/lib.rs</code></td><td>JSONL session metadata and response history recording, reading, listing, archive path support.</td></tr>
+<tr><td><code>crates/thread-store/src/lib.rs</code></td><td>Thread persistence trait, local rollout-backed store, remote stub, append helper.</td></tr>
+<tr><td><code>crates/state-store/src/lib.rs</code></td><td>Local metadata/log appenders and migration marker.</td></tr>
+</tbody></table>
+</div>
+<h2 id="cratesui-bridge"><a class="header" href="#cratesui-bridge"><code>crates/ui-bridge</code></a></h2>
+<div class="table-wrapper"><table><thead><tr><th>File</th><th>Responsibility</th></tr></thead><tbody>
+<tr><td><code>crates/ui-bridge/src/lib.rs</code></td><td>VSCode request/response envelopes, runtime event mapping, web event mapping, CLI event mapping, user text operation helper.</td></tr>
+</tbody></table>
+</div><div style="break-before: page; page-break-before: always;"></div><h1 id="interface-reference"><a class="header" href="#interface-reference">Interface Reference</a></h1>
+<p>This page is a compact lookup for public interfaces across the workspace.</p>
+<h2 id="protocol-interfaces"><a class="header" href="#protocol-interfaces">Protocol Interfaces</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Interface</th><th>Kind</th><th>Purpose</th></tr></thead><tbody>
+<tr><td><code>ThreadId</code></td><td>struct</td><td>Typed thread identifier with generation, parsing, display, and serde.</td></tr>
+<tr><td><code>W3cTraceContext</code></td><td>struct</td><td>Optional traceparent/tracestate metadata.</td></tr>
+<tr><td><code>Submission</code></td><td>struct</td><td>Submission id, operation, and optional trace.</td></tr>
+<tr><td><code>Op</code></td><td>enum</td><td>Runtime operations: interrupt, user input, user turn, injection, synthetic.</td></tr>
+<tr><td><code>AskForApproval</code></td><td>enum</td><td>Approval policy: never or on request.</td></tr>
+<tr><td><code>SandboxPolicy</code></td><td>enum</td><td>Sandbox mode: workspace write, read only, danger full access.</td></tr>
+<tr><td><code>DynamicToolSpec</code></td><td>struct</td><td>Tool name, description, and JSON schema parameters.</td></tr>
+<tr><td><code>UserInput</code></td><td>enum</td><td>Text, image, local image, skill, or mention.</td></tr>
+<tr><td><code>TextElement</code></td><td>struct</td><td>Structured byte range in a text input.</td></tr>
+<tr><td><code>ByteRange</code></td><td>struct</td><td>Start/end byte offsets.</td></tr>
+<tr><td><code>ContentItem</code></td><td>enum</td><td>Input or output text content.</td></tr>
+<tr><td><code>MessagePhase</code></td><td>enum</td><td>Commentary or final answer marker.</td></tr>
+<tr><td><code>ResponseItem</code></td><td>enum</td><td>Message, function call, or function call output.</td></tr>
+<tr><td><code>Event</code></td><td>struct</td><td>Submission id plus <code>EventMsg</code>.</td></tr>
+<tr><td><code>EventMsg</code></td><td>enum</td><td>Runtime event vocabulary.</td></tr>
+<tr><td>Event payload structs</td><td>structs</td><td>Error, warning, session, turn, message, tool, token events.</td></tr>
+<tr><td><code>TokenUsage</code></td><td>struct</td><td>Input/output/reasoning/total token counters.</td></tr>
+<tr><td><code>TokenUsageInfo</code></td><td>struct</td><td>Last and total usage plus optional context window.</td></tr>
+<tr><td><code>SessionSource</code></td><td>enum</td><td>CLI, web, custom, unknown.</td></tr>
+<tr><td><code>SessionMeta</code></td><td>struct</td><td>Persistent thread metadata.</td></tr>
+<tr><td><code>SessionMetaLine</code></td><td>struct</td><td>Rollout metadata wrapper.</td></tr>
+<tr><td><code>RolloutItem</code></td><td>enum</td><td>JSONL line type.</td></tr>
+<tr><td><code>ForkedFrom</code></td><td>enum</td><td>Fork source classification.</td></tr>
+<tr><td><code>ProtocolError</code></td><td>enum</td><td>Invalid thread id.</td></tr>
+</tbody></table>
+</div>
+<h2 id="session-kernel-interfaces"><a class="header" href="#session-kernel-interfaces">Session Kernel Interfaces</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Interface</th><th>Kind</th><th>Purpose</th></tr></thead><tbody>
+<tr><td><code>KernelError</code></td><td>enum</td><td>Runtime error type.</td></tr>
+<tr><td><code>SteerInputError</code></td><td>enum</td><td>Steering error type.</td></tr>
+<tr><td><code>SessionConfig</code></td><td>struct</td><td>Thread runtime configuration.</td></tr>
+<tr><td><code>ThreadConfigSnapshot</code></td><td>struct</td><td>Read-only config snapshot.</td></tr>
+<tr><td><code>StartThreadOk</code></td><td>struct</td><td>Thread id and handle returned by manager.</td></tr>
+<tr><td><code>ForkSnapshot</code></td><td>enum</td><td>Fork history selection.</td></tr>
+<tr><td><code>ToolExecutionResult</code></td><td>struct</td><td>Tool output wrapper.</td></tr>
+<tr><td><code>ToolExecutor</code></td><td>trait</td><td>Async tool execution boundary.</td></tr>
+<tr><td><code>Scheduler</code></td><td>trait</td><td>Async model turn boundary.</td></tr>
+<tr><td><code>HistoryStore</code></td><td>trait</td><td>Thread history persistence boundary.</td></tr>
+<tr><td><code>EventSink</code></td><td>trait</td><td>Async event sink boundary.</td></tr>
+<tr><td><code>TurnRequest</code></td><td>struct</td><td>Complete scheduler request.</td></tr>
+<tr><td><code>SchedulerOutput</code></td><td>struct</td><td>Scheduler result for history and final message.</td></tr>
+<tr><td><code>EventEmitter</code></td><td>struct</td><td>Submission-scoped event sender.</td></tr>
+<tr><td><code>CancellationFlag</code></td><td>struct</td><td>Shared cancellation flag.</td></tr>
+<tr><td><code>LocalHistoryStore</code></td><td>struct</td><td>Rollout-backed history store.</td></tr>
+<tr><td><code>ThreadManager</code></td><td>struct</td><td>Active thread manager and factory.</td></tr>
+<tr><td><code>ThreadHandle</code></td><td>struct</td><td>Per-thread submission/event/history handle.</td></tr>
+</tbody></table>
+</div>
+<h2 id="scheduler-interfaces"><a class="header" href="#scheduler-interfaces">Scheduler Interfaces</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Interface</th><th>Kind</th><th>Purpose</th></tr></thead><tbody>
+<tr><td><code>OpenAiScheduler</code></td><td>struct</td><td>Real OpenAI-compatible scheduler.</td></tr>
+<tr><td><code>SyntheticScheduler</code></td><td>struct</td><td>Local deterministic scheduler.</td></tr>
+</tbody></table>
+</div>
+<h2 id="openai-client-interfaces"><a class="header" href="#openai-client-interfaces">OpenAI Client Interfaces</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Interface</th><th>Kind</th><th>Purpose</th></tr></thead><tbody>
+<tr><td><code>AuthProvider</code></td><td>trait</td><td>Bearer-token source.</td></tr>
+<tr><td><code>BearerAuth</code></td><td>struct</td><td>Static bearer-token auth.</td></tr>
+<tr><td><code>Client</code></td><td>struct</td><td>Top-level API client.</td></tr>
+<tr><td><code>ClientBuilder</code></td><td>struct</td><td>Client configuration builder.</td></tr>
+<tr><td><code>Provider</code></td><td>struct</td><td>Endpoint, headers, query params, retry, timeout.</td></tr>
+<tr><td><code>RetryConfig</code></td><td>struct</td><td>High-level retry settings.</td></tr>
+<tr><td><code>Request</code></td><td>struct</td><td>Transport-neutral HTTP request.</td></tr>
+<tr><td><code>Response</code></td><td>struct</td><td>Transport-neutral HTTP response.</td></tr>
+<tr><td><code>HttpTransport</code></td><td>trait</td><td>Execute and stream HTTP requests.</td></tr>
+<tr><td><code>ReqwestTransport</code></td><td>struct</td><td>Reqwest implementation.</td></tr>
+<tr><td><code>RetryPolicy</code></td><td>struct</td><td>Retry execution policy.</td></tr>
+<tr><td><code>RetryOn</code></td><td>struct</td><td>Retry predicate settings.</td></tr>
+<tr><td><code>Chat</code></td><td>struct</td><td>Chat namespace.</td></tr>
+<tr><td><code>Completions</code></td><td>struct</td><td>Chat completions API.</td></tr>
+<tr><td><code>ChatStream</code></td><td>struct</td><td>Async stream of chat events.</td></tr>
+<tr><td><code>ChatStreamEvent</code></td><td>enum</td><td>Delta or done.</td></tr>
+<tr><td><code>ChatCompletionRequest</code></td><td>struct</td><td>Chat request payload.</td></tr>
+<tr><td><code>Message</code></td><td>struct</td><td>Chat message.</td></tr>
+<tr><td><code>Role</code></td><td>enum</td><td>System, user, assistant, tool.</td></tr>
+<tr><td><code>ToolCall</code></td><td>struct</td><td>Assistant tool call.</td></tr>
+<tr><td><code>ToolCallFunction</code></td><td>struct</td><td>Tool call function details.</td></tr>
+<tr><td><code>ChatCompletionResponse</code></td><td>struct</td><td>Non-streaming response.</td></tr>
+<tr><td><code>Choice</code></td><td>struct</td><td>Response choice.</td></tr>
+<tr><td><code>ToolDefinition</code></td><td>struct</td><td>Tool definition payload.</td></tr>
+<tr><td><code>FunctionDef</code></td><td>struct</td><td>Function tool details.</td></tr>
+<tr><td><code>Usage</code></td><td>struct</td><td>Token usage.</td></tr>
+<tr><td><code>FinishReason</code></td><td>enum</td><td>Stop, tool calls, length, content filter.</td></tr>
+<tr><td><code>StreamChunk</code> and delta types</td><td>structs</td><td>Streaming response shape.</td></tr>
+<tr><td><code>TransportError</code>, <code>StreamError</code>, <code>ApiError</code></td><td>enums</td><td>Error hierarchy.</td></tr>
+</tbody></table>
+</div>
+<h2 id="status-interfaces"><a class="header" href="#status-interfaces">Status Interfaces</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Interface</th><th>Kind</th><th>Purpose</th></tr></thead><tbody>
+<tr><td><code>WorkspaceMeta</code></td><td>struct</td><td>Workspace root/name/language.</td></tr>
+<tr><td><code>Freshness</code></td><td>enum</td><td>Segment freshness.</td></tr>
+<tr><td><code>RiskLevel</code></td><td>enum</td><td>Segment risk.</td></tr>
+<tr><td><code>SegmentKind</code></td><td>enum</td><td>Segment category.</td></tr>
+<tr><td><code>StatusSegment</code></td><td>struct</td><td>Deterministic status segment.</td></tr>
+<tr><td><code>Position</code>, <code>TextRange</code></td><td>structs</td><td>Editor positions and ranges.</td></tr>
+<tr><td><code>EditorRef</code></td><td>struct</td><td>File editor reference.</td></tr>
+<tr><td><code>VisibleRange</code></td><td>struct</td><td>Visible editor range.</td></tr>
+<tr><td><code>SelectionState</code></td><td>struct</td><td>Selection state.</td></tr>
+<tr><td><code>CursorContext</code></td><td>struct</td><td>Cursor bubble and symbol hint.</td></tr>
+<tr><td><code>DiagnosticSeverity</code></td><td>enum</td><td>VSCode diagnostic severity.</td></tr>
+<tr><td><code>DiagnosticEvent</code></td><td>struct</td><td>Diagnostic record.</td></tr>
+<tr><td><code>TerminalSessionState</code></td><td>struct</td><td>Terminal-like session state.</td></tr>
+<tr><td><code>VscodeTaskState</code></td><td>struct</td><td>Task state.</td></tr>
+<tr><td><code>DebugSessionState</code></td><td>struct</td><td>Debug state.</td></tr>
+<tr><td><code>ClipboardHint</code></td><td>struct</td><td>Clipboard summary.</td></tr>
+<tr><td><code>VscodeStatus</code></td><td>struct</td><td>Full IDE status payload.</td></tr>
+<tr><td><code>GitDiffSummary</code></td><td>struct</td><td>Diff shortstat.</td></tr>
+<tr><td><code>GitState</code></td><td>struct</td><td>Git working tree state.</td></tr>
+<tr><td><code>CommandResult</code></td><td>struct</td><td>Command result record.</td></tr>
+<tr><td><code>CommandState</code></td><td>struct</td><td>Recent command list.</td></tr>
+<tr><td><code>CodebaseStatus</code></td><td>struct</td><td>Full status snapshot.</td></tr>
+<tr><td><code>ProactiveSuggestion</code></td><td>struct</td><td>Suggested intervention.</td></tr>
+<tr><td><code>StucknessSignal</code></td><td>struct</td><td>Friction detection result.</td></tr>
+<tr><td><code>StatusReport</code></td><td>struct</td><td>UI-facing report.</td></tr>
+<tr><td><code>ContextCapsule</code></td><td>struct</td><td>Prompt-facing context.</td></tr>
+<tr><td><code>StatusStore</code></td><td>struct</td><td>Mutable status store.</td></tr>
+<tr><td><code>ParsedGitStatus</code></td><td>struct</td><td>Parsed porcelain status.</td></tr>
+</tbody></table>
+</div>
+<h2 id="persistence-interfaces"><a class="header" href="#persistence-interfaces">Persistence Interfaces</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Interface</th><th>Kind</th><th>Purpose</th></tr></thead><tbody>
+<tr><td><code>RolloutConfig</code></td><td>struct</td><td>Rollout root and derived dirs.</td></tr>
+<tr><td><code>RolloutRecorderParams</code></td><td>struct</td><td>Metadata for recorder creation.</td></tr>
+<tr><td><code>RolloutRecorder</code></td><td>struct</td><td>Append-only rollout writer.</td></tr>
+<tr><td><code>ThreadItem</code></td><td>struct</td><td>Listed rollout thread.</td></tr>
+<tr><td><code>ThreadListConfig</code></td><td>struct</td><td>Include archived flag.</td></tr>
+<tr><td><code>ThreadsPage</code></td><td>struct</td><td>Rollout listing page.</td></tr>
+<tr><td><code>ThreadStoreError</code></td><td>enum</td><td>Thread store errors.</td></tr>
+<tr><td><code>ThreadStore</code></td><td>trait</td><td>Thread storage API.</td></tr>
+<tr><td><code>LocalThreadStore</code></td><td>struct</td><td>Local rollout-backed store.</td></tr>
+<tr><td><code>RemoteThreadStore</code></td><td>struct</td><td>Remote stub.</td></tr>
+<tr><td><code>ThreadRecorder</code></td><td>struct</td><td>Append helper.</td></tr>
+<tr><td><code>StateRuntime</code></td><td>struct</td><td>Metadata/log runtime.</td></tr>
+<tr><td><code>ThreadMetadata</code></td><td>struct</td><td>Thread metadata row.</td></tr>
+<tr><td><code>ThreadMetadataBuilder</code></td><td>struct</td><td>Optional metadata builder.</td></tr>
+<tr><td><code>LogEntry</code>, <code>LogQuery</code>, <code>LogRow</code></td><td>structs</td><td>Log API shell.</td></tr>
+</tbody></table>
+</div>
+<h2 id="ui-bridge-interfaces"><a class="header" href="#ui-bridge-interfaces">UI Bridge Interfaces</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Interface</th><th>Kind</th><th>Purpose</th></tr></thead><tbody>
+<tr><td><code>VscodeRequestEnvelope</code></td><td>struct</td><td>Stdio request envelope.</td></tr>
+<tr><td><code>VscodeRequest</code></td><td>enum</td><td>Initialize, status update, command result, prompt, shutdown.</td></tr>
+<tr><td><code>VscodeResponseEnvelope</code></td><td>struct</td><td>Stdio response envelope.</td></tr>
+<tr><td><code>VscodeResponse</code></td><td>enum</td><td>Ready, status report, agent event, complete, error, shutdown complete.</td></tr>
+<tr><td><code>VscodeRuntimeEvent</code></td><td>enum</td><td>Surface event for VSCode.</td></tr>
+<tr><td><code>WebEvent</code></td><td>struct</td><td>SSE event name and JSON data.</td></tr>
+<tr><td><code>CliEvent</code></td><td>enum</td><td>Terminal event rendering instruction.</td></tr>
+</tbody></table>
+</div>
+<h2 id="root-runtime-interfaces"><a class="header" href="#root-runtime-interfaces">Root Runtime Interfaces</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Interface</th><th>Kind</th><th>Purpose</th></tr></thead><tbody>
+<tr><td><code>Cli</code></td><td>struct</td><td>CLI flag parser.</td></tr>
+<tr><td><code>AppState</code></td><td>struct</td><td>Web harness state.</td></tr>
+<tr><td><code>ChatRequest</code>, <code>WebMessage</code></td><td>structs</td><td>Web chat payload.</td></tr>
+<tr><td><code>LocalToolExecutor</code></td><td>struct</td><td>Root tool executor implementation.</td></tr>
+<tr><td><code>ToolResult</code></td><td>struct</td><td>Tool output wrapper.</td></tr>
+<tr><td><code>VscodeServer</code></td><td>struct</td><td>Internal stdio server state.</td></tr>
+</tbody></table>
+</div>
+<h2 id="vscode-extension-interfaces"><a class="header" href="#vscode-extension-interfaces">VSCode Extension Interfaces</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Interface</th><th>Kind</th><th>Purpose</th></tr></thead><tbody>
+<tr><td><code>activate</code>, <code>deactivate</code></td><td>functions</td><td>Extension lifecycle.</td></tr>
+<tr><td><code>MarvisController</code></td><td>class</td><td>Main extension coordinator.</td></tr>
+<tr><td><code>RuntimeClient</code></td><td>class</td><td>Child process JSON-RPC-like client.</td></tr>
+<tr><td><code>MarvisCodeActionProvider</code></td><td>class</td><td>Diagnostic quick fixes.</td></tr>
+<tr><td>helper functions</td><td>functions</td><td>Runtime resolution, status collection, rendering, truncation, path checks.</td></tr>
+</tbody></table>
+</div>
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr.min.js"></script>
+        <script src="mark.min.js"></script>
+        <script src="searcher.js"></script>
+
+        <script src="clipboard.min.js"></script>
+        <script src="highlight.js"></script>
+        <script src="book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+        <script>
+        window.addEventListener('load', function() {
+            window.setTimeout(window.print, 100);
+        });
+        </script>
+
+    </div>
+    </body>
+</html>

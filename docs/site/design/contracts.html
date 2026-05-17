@@ -1,0 +1,278 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Design Contracts - lite-code / Marvis Runtime Design</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="../highlight.css">
+        <link rel="stylesheet" href="../tomorrow-night.css">
+        <link rel="stylesheet" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+        <link rel="stylesheet" href="../theme/custom.css">
+
+
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "../";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="../toc.js"></script>
+    </head>
+    <body>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="../toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">lite-code / Marvis Runtime Design</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="design-contracts"><a class="header" href="#design-contracts">Design Contracts</a></h1>
+<p>The codebase has a small set of contracts that matter more than individual modules.</p>
+<h2 id="stable-serialization-contract"><a class="header" href="#stable-serialization-contract">Stable Serialization Contract</a></h2>
+<p>Types in <code>crates/protocol</code> are the serialization layer for runtime operations, events, response items, and rollout records. They should remain backward compatible whenever possible because rollout files and external shells depend on them.</p>
+<p>Design rules:</p>
+<ul>
+<li>Prefer additive fields with <code>#[serde(default)]</code>.</li>
+<li>Keep enum tag names stable once external surfaces use them.</li>
+<li>Keep process messages explicit and typed rather than ad hoc JSON.</li>
+<li>Use <code>ThreadId</code> instead of raw strings at Rust boundaries.</li>
+</ul>
+<h2 id="thread-contract"><a class="header" href="#thread-contract">Thread Contract</a></h2>
+<p><code>ThreadHandle</code> is the operational interface for a single conversation thread.</p>
+<p>It guarantees:</p>
+<ul>
+<li>Submissions are accepted through an async channel.</li>
+<li>Events are consumed from a single event receiver.</li>
+<li>User and assistant response items are appended to history.</li>
+<li>Rollout persistence happens if the thread has a rollout path.</li>
+<li>Interrupts emit a terminal abort event.</li>
+</ul>
+<p>It does not guarantee:</p>
+<ul>
+<li>Parallel turns on one thread. The active turn and pending input model is sequential.</li>
+<li>Durable persistence of every transient event. The main persisted history is response items.</li>
+<li>A stable token usage implementation yet.</li>
+</ul>
+<h2 id="scheduler-contract"><a class="header" href="#scheduler-contract">Scheduler Contract</a></h2>
+<p><code>Scheduler::run_turn</code> receives a complete <code>TurnRequest</code> and an <code>EventEmitter</code>.</p>
+<p>It owns:</p>
+<ul>
+<li>Model message construction.</li>
+<li>Model streaming.</li>
+<li>Tool call execution ordering.</li>
+<li>Final assistant message extraction.</li>
+<li>Returning persisted response items.</li>
+</ul>
+<p>It should not own:</p>
+<ul>
+<li>Thread creation or lookup.</li>
+<li>Rollout file paths.</li>
+<li>UI-specific event formats.</li>
+<li>VSCode status collection.</li>
+</ul>
+<h2 id="tool-contract"><a class="header" href="#tool-contract">Tool Contract</a></h2>
+<p><code>ToolExecutor</code> is intentionally minimal:</p>
+<pre><code class="language-rust ignore">async fn execute_tool(&amp;self, name: &amp;str, input: &amp;serde_json::Value) -&gt; ToolExecutionResult;</code></pre>
+<p>The current tool definitions are dynamic JSON schema records. The model receives the schema, then calls a tool by name with JSON arguments.</p>
+<p>Design implications:</p>
+<ul>
+<li>The scheduler can stay provider-neutral.</li>
+<li>Tool policy can be introduced behind <code>ToolExecutor</code>.</li>
+<li>Tool schema and tool execution must stay aligned manually until a stronger tool registry exists.</li>
+</ul>
+<h2 id="status-contract"><a class="header" href="#status-contract">Status Contract</a></h2>
+<p>The status crate turns external state into a deterministic <code>StatusReport</code> and <code>ContextCapsule</code>.</p>
+<p>It should remain:</p>
+<ul>
+<li>Pure for segmentation and stuckness functions where possible.</li>
+<li>Conservative about token volume.</li>
+<li>Independent from OpenAI-specific types.</li>
+<li>Testable without VSCode or a model.</li>
+</ul>
+<h2 id="ui-contract"><a class="header" href="#ui-contract">UI Contract</a></h2>
+<p>The UI bridge maps protocol events into surface-specific formats. It should be a formatting adapter, not a business-logic layer.</p>
+<p>Surface behavior:</p>
+<ul>
+<li>CLI consumes deltas, tool start/end, errors, aborts, and turn completion.</li>
+<li>Web exposes SSE events named <code>delta</code>, <code>tool_start</code>, <code>tool_end</code>, <code>error</code>, and <code>done</code>.</li>
+<li>VSCode exposes <code>VscodeRuntimeEvent</code> variants for deltas, final messages, tools, turn lifecycle, and errors.</li>
+</ul>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../design/flows.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="../crates/protocol.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../design/flows.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="../crates/protocol.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="../elasticlunr.min.js"></script>
+        <script src="../mark.min.js"></script>
+        <script src="../searcher.js"></script>
+
+        <script src="../clipboard.min.js"></script>
+        <script src="../highlight.js"></script>
+        <script src="../book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+    </div>
+    </body>
+</html>

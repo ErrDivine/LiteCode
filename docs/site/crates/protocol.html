@@ -1,0 +1,310 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Protocol Crate - lite-code / Marvis Runtime Design</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="../highlight.css">
+        <link rel="stylesheet" href="../tomorrow-night.css">
+        <link rel="stylesheet" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+        <link rel="stylesheet" href="../theme/custom.css">
+
+
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "../";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="../toc.js"></script>
+    </head>
+    <body>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="../toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">lite-code / Marvis Runtime Design</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="protocol-crate"><a class="header" href="#protocol-crate">Protocol Crate</a></h1>
+<p><code>crates/protocol</code> is the shared runtime vocabulary. It contains no scheduling, UI, transport, or storage behavior. Its job is to make process messages, rollout lines, and internal runtime operations explicit and serializable.</p>
+<h2 id="modules"><a class="header" href="#modules">Modules</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Module</th><th>Purpose</th></tr></thead><tbody>
+<tr><td><code>lib.rs</code></td><td>Defines operations, user inputs, response items, events, session metadata, tool specs, rollout items, and compatibility re-export modules.</td></tr>
+<tr><td><code>thread_id.rs</code></td><td>Defines <code>ThreadId</code>, generation, parsing, display, and serde behavior.</td></tr>
+</tbody></table>
+</div>
+<p>Compatibility modules in <code>lib.rs</code> re-export the current types:</p>
+<ul>
+<li><code>protocol</code> re-exports the broad event and operation surface.</li>
+<li><code>user_input</code> re-exports <code>UserInput</code>, <code>TextElement</code>, and <code>ByteRange</code>.</li>
+<li><code>models</code> re-exports <code>ContentItem</code>, <code>MessagePhase</code>, and <code>ResponseItem</code>.</li>
+<li><code>dynamic_tools</code> re-exports <code>DynamicToolSpec</code>.</li>
+</ul>
+<p>These modules let older call sites keep using grouped paths while the source definitions remain in one file.</p>
+<h2 id="operation-model"><a class="header" href="#operation-model">Operation Model</a></h2>
+<p><code>Submission</code> wraps an <code>Op</code> with:</p>
+<ul>
+<li><code>id</code>: caller-provided or generated submission id.</li>
+<li><code>op</code>: requested runtime operation.</li>
+<li><code>trace</code>: optional <code>W3cTraceContext</code>.</li>
+</ul>
+<p><code>Op</code> variants:</p>
+<div class="table-wrapper"><table><thead><tr><th>Variant</th><th>Design role</th></tr></thead><tbody>
+<tr><td><code>Interrupt</code></td><td>Cancels the active turn or reports that the thread is idle.</td></tr>
+<tr><td><code>UserInput</code></td><td>Normal user input. Supports multiple <code>UserInput</code> items, optional final JSON schema, and optional client metadata.</td></tr>
+<tr><td><code>UserTurn</code></td><td>User input plus per-turn overrides for cwd, approval policy, sandbox policy, and model.</td></tr>
+<tr><td><code>InjectResponseItems</code></td><td>Directly adds prior response items to thread history. Used by web history injection and resume-style workflows.</td></tr>
+<tr><td><code>Synthetic</code></td><td>Convenience operation that turns a message into text input. Useful for tests and harnesses.</td></tr>
+</tbody></table>
+</div>
+<p><code>Op::user_text</code> is a helper for simple text turns.</p>
+<h2 id="user-input-model"><a class="header" href="#user-input-model">User Input Model</a></h2>
+<p><code>UserInput</code> supports:</p>
+<ul>
+<li><code>Text { text, text_elements }</code></li>
+<li><code>Image { image_url }</code></li>
+<li><code>LocalImage { path }</code></li>
+<li><code>Skill { name, path }</code></li>
+<li><code>Mention { name, path }</code></li>
+</ul>
+<p>The current scheduler only uses text inputs. The broader shape allows future UI shells to attach images, skills, and connector mentions without changing the kernel submission model.</p>
+<p><code>TextElement</code> uses a <code>ByteRange</code> and optional placeholder. This gives the protocol a way to represent structured selections or inline mentions inside text.</p>
+<h2 id="response-item-model"><a class="header" href="#response-item-model">Response Item Model</a></h2>
+<p><code>ResponseItem</code> is the persisted conversation unit:</p>
+<div class="table-wrapper"><table><thead><tr><th>Variant</th><th>Meaning</th></tr></thead><tbody>
+<tr><td><code>Message</code></td><td>User, assistant, or system-style content. Content is a list of <code>ContentItem</code>s.</td></tr>
+<tr><td><code>FunctionCall</code></td><td>A model tool call record. Defined in the protocol, but not currently persisted by the scheduler.</td></tr>
+<tr><td><code>FunctionCallOutput</code></td><td>Tool output associated with a call id.</td></tr>
+</tbody></table>
+</div>
+<p><code>ResponseItem::message(role, text)</code> picks <code>InputText</code> for non-assistant roles and <code>OutputText</code> for assistant role. <code>role()</code> and <code>text()</code> are convenience accessors used by the kernel and scheduler.</p>
+<p><code>MessagePhase</code> distinguishes <code>commentary</code> from <code>final_answer</code> for future surfaces that need channel-aware rendering.</p>
+<h2 id="event-model"><a class="header" href="#event-model">Event Model</a></h2>
+<p><code>Event</code> contains a submission id and an <code>EventMsg</code>.</p>
+<p><code>EventMsg</code> variants:</p>
+<ul>
+<li><code>Error</code></li>
+<li><code>Warning</code></li>
+<li><code>SessionConfigured</code></li>
+<li><code>ThreadNameUpdated</code></li>
+<li><code>TurnStarted</code></li>
+<li><code>TurnComplete</code></li>
+<li><code>TurnAborted</code></li>
+<li><code>UserMessage</code></li>
+<li><code>AgentMessage</code></li>
+<li><code>AgentMessageDelta</code></li>
+<li><code>ToolCallBegin</code></li>
+<li><code>ToolCallEnd</code></li>
+<li><code>TokenCount</code></li>
+<li><code>ShutdownComplete</code></li>
+</ul>
+<p>Event structs are intentionally small and UI-neutral. For example, <code>ToolCallBeginEvent</code> contains <code>call_id</code>, <code>name</code>, and serialized <code>arguments</code>; presentation is handled in <code>ui-bridge</code>.</p>
+<h2 id="session-metadata-and-rollout-records"><a class="header" href="#session-metadata-and-rollout-records">Session Metadata And Rollout Records</a></h2>
+<p><code>SessionMeta</code> captures persistent thread metadata:</p>
+<ul>
+<li><code>id</code></li>
+<li><code>forked_from_id</code></li>
+<li><code>timestamp</code></li>
+<li><code>cwd</code></li>
+<li><code>originator</code></li>
+<li><code>cli_version</code></li>
+<li><code>source</code></li>
+<li><code>model_provider</code></li>
+<li><code>dynamic_tools</code></li>
+</ul>
+<p><code>RolloutItem</code> wraps the JSONL line types:</p>
+<ul>
+<li><code>SessionMeta</code></li>
+<li><code>ResponseItem</code></li>
+<li><code>EventMsg</code></li>
+</ul>
+<p>Today the runtime writes session metadata and response items. The event variant exists for richer trace persistence.</p>
+<h2 id="threadid"><a class="header" href="#threadid">ThreadId</a></h2>
+<p><code>ThreadId</code> is a newtype over <code>String</code>.</p>
+<p>Key properties:</p>
+<ul>
+<li><code>ThreadId::new()</code> produces non-empty id strings using time and an atomic counter.</li>
+<li><code>from_string</code> trims and rejects empty ids.</li>
+<li><code>Display</code>, <code>From&lt;ThreadId&gt; for String</code>, <code>TryFrom&lt;&amp;str&gt;</code>, <code>Serialize</code>, and <code>Deserialize</code> are implemented.</li>
+</ul>
+<p>This type protects internal APIs from accepting arbitrary empty thread ids while staying JSON-friendly.</p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../design/contracts.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="../crates/session-kernel.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../design/contracts.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="../crates/session-kernel.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="../elasticlunr.min.js"></script>
+        <script src="../mark.min.js"></script>
+        <script src="../searcher.js"></script>
+
+        <script src="../clipboard.min.js"></script>
+        <script src="../highlight.js"></script>
+        <script src="../book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+    </div>
+    </body>
+</html>

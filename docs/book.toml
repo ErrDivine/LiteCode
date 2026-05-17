@@ -1,0 +1,20 @@
+[book]
+title = "lite-code / Marvis Runtime Design"
+authors = ["lite-code maintainers"]
+language = "en"
+multilingual = false
+src = "src"
+
+[build]
+build-dir = "site"
+create-missing = false
+
+[output.html]
+additional-css = ["theme/custom.css"]
+git-repository-icon = "fa-github"
+site-url = "/"
+mathjax-support = false
+preferred-dark-theme = "navy"
+
+[output.html.print]
+enable = true

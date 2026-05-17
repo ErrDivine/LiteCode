@@ -1,0 +1,118 @@
+{
+  "name": "marvis-vscode",
+  "displayName": "Marvis Coding Agent OS",
+  "description": "VSCode shell for the Marvis coding-agent runtime in lite-code.",
+  "version": "0.1.0",
+  "publisher": "local",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished",
+    "onCommand:marvis.start",
+    "onCommand:marvis.showStatus",
+    "onCommand:marvis.refreshStatus",
+    "onCommand:marvis.ask",
+    "onCommand:marvis.askAboutSelection",
+    "onCommand:marvis.fixNearCursor",
+    "onCommand:marvis.explainDiagnostic",
+    "onCommand:marvis.recordTerminalFailure",
+    "onCommand:marvis.runCommandAndRecord",
+    "onCommand:marvis.runTaskAndRecord"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "marvis.start",
+        "title": "Start Marvis",
+        "category": "Marvis"
+      },
+      {
+        "command": "marvis.showStatus",
+        "title": "Show Status",
+        "category": "Marvis"
+      },
+      {
+        "command": "marvis.refreshStatus",
+        "title": "Refresh Status",
+        "category": "Marvis"
+      },
+      {
+        "command": "marvis.ask",
+        "title": "Ask Marvis",
+        "category": "Marvis"
+      },
+      {
+        "command": "marvis.askAboutSelection",
+        "title": "Ask About Selection",
+        "category": "Marvis"
+      },
+      {
+        "command": "marvis.fixNearCursor",
+        "title": "Fix Near Cursor",
+        "category": "Marvis"
+      },
+      {
+        "command": "marvis.explainDiagnostic",
+        "title": "Explain Diagnostic",
+        "category": "Marvis"
+      },
+      {
+        "command": "marvis.recordTerminalFailure",
+        "title": "Record Terminal Failure",
+        "category": "Marvis"
+      },
+      {
+        "command": "marvis.runCommandAndRecord",
+        "title": "Run Command and Record Result",
+        "category": "Marvis"
+      },
+      {
+        "command": "marvis.runTaskAndRecord",
+        "title": "Run VSCode Task and Record Result",
+        "category": "Marvis"
+      }
+    ],
+    "configuration": {
+      "title": "Marvis",
+      "properties": {
+        "marvis.runtimePath": {
+          "type": "string",
+          "default": "",
+          "description": "Optional path to the lite-code binary. If empty, the extension tries target/debug/lite-code, then cargo run."
+        },
+        "marvis.model": {
+          "type": "string",
+          "default": "nvidia/nemotron-3-super-120b-a12b:free",
+          "description": "Model name passed to the Rust runtime."
+        },
+        "marvis.maxTokens": {
+          "type": "number",
+          "default": 4096,
+          "description": "Maximum response tokens per model turn."
+        }
+      }
+    },
+    "menus": {
+      "editor/context": [
+        {
+          "command": "marvis.askAboutSelection",
+          "when": "editorTextFocus",
+          "group": "navigation"
+        },
+        {
+          "command": "marvis.fixNearCursor",
+          "when": "editorTextFocus",
+          "group": "navigation"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "check": "node --check extension.js"
+  }
+}

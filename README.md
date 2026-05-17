@@ -1,12 +1,14 @@
-# lite-code
+# lite-code / Marvis
 
-A minimal one-turn vibe coding CLI that uses a language model (via OpenRouter) with access to shell and file writing tools to accomplish coding tasks.
+A Rust coding-agent runtime with a VSCode product shell. The original CLI and web UI still exist as harnesses, but the main product direction is Marvis inside VSCode.
 
 ## Features
 
-- **One-turn interaction**: Provide a prompt and let the model use tools iteratively until the task is complete.
-- **Tool usage**: The model can execute shell commands and write files to work on your project.
-- **Streaming responses**: See the model's reasoning and output in real-time.
+- **VSCode status ingestion**: Collects active editor, cursor, selections, visible ranges, Problems diagnostics, task/debug state, and recorded command results.
+- **Structured status**: Builds `CodebaseStatus`, git state, deterministic segments, stuckness hints, and context capsules.
+- **Agent runtime**: Uses `session-kernel` and `scheduler` for streamed model/tool turns.
+- **Tool usage**: The model can execute shell commands and read/write/edit files through local tools.
+- **Streaming responses**: CLI, web, and VSCode bridge all receive runtime events.
 - **Configurable model**: Choose any model available on OpenRouter (defaults to `nvidia/nemotron-3-super-120b-a12b:free`).
 - **Built with Rust**: Fast, safe, and efficient.
 
@@ -67,16 +69,50 @@ echo 'export OPENROUTER_API_KEY="your_api_key_here"' >> ~/.zshrc
 source ~/.zshrc
 ```
 
-Run the CLI with your prompt:
+Run the CLI harness:
 
 ```bash
-./target/release/lite-code "Your prompt here"
+./target/release/lite-code
 ```
 
 ### Options
 
+- `--vscode-stdio`: Run the JSON stdio bridge used by the VSCode extension
+- `--web`: Launch the temporary web harness
 - `--model`, `-m`: Specify the model to use (default: `nvidia/nemotron-3-super-120b-a12b:free`)
 - `--max-tokens`: Maximum tokens for each API response (default: `4096`)
+
+## VSCode Extension
+
+The VSCode product shell lives in `apps/vscode-extension`.
+
+```bash
+cargo build
+```
+
+Then open `apps/vscode-extension` in VSCode, press `F5`, and run `Marvis: Start Marvis` in the Extension Development Host.
+
+The extension starts:
+
+```bash
+target/debug/lite-code --vscode-stdio
+```
+
+If that binary is missing, it falls back to:
+
+```bash
+cargo run --quiet -- --vscode-stdio
+```
+
+Useful commands:
+
+- `Marvis: Start Marvis`
+- `Marvis: Show Status`
+- `Marvis: Ask Marvis`
+- `Marvis: Fix Near Cursor`
+- `Marvis: Record Terminal Failure`
+- `Marvis: Run Command and Record Result`
+- `Marvis: Run VSCode Task and Record Result`
 
 ### Example
 
@@ -98,26 +134,25 @@ If this variable is not set, the CLI exits with a clear error message.
 
 ## How It Works
 
-lite-code uses the OpenRouter API to chat with a language model, providing it with two tools:
-- `shell`: Execute a shell command
-- `write_file`: Write content to a file
-
-The system prompt instructs the model to:
-- Use tools to accomplish the user's request
-- Work step by step, verifying progress
-- Provide a brief summary when finished
-
-The CLI streams the model's responses and executes any tool calls it makes, feeding the results back into the conversation until the model indicates completion.
+VSCode sends live editor status to the Rust stdio bridge. The Rust runtime turns that into segments such as user focus, diagnostics, recent diff, command failure, and risk. When the user asks Marvis for help, the runtime builds a context capsule from the active editor, cursor bubble, diagnostics, git state, and recent commands, then runs a normal `session-kernel` thread.
 
 ## Project Structure
 
 ```
+apps/
+└── vscode-extension/ # VSCode product shell
+crates/
+├── protocol/         # shared operations, events, ids, and response items
+├── rollout/          # JSONL thread history
+├── session-kernel/   # thread/session runtime
+├── scheduler/        # model turn execution
+├── status/           # VSCode/codebase status, segments, stuckness, capsules
+└── ui-bridge/        # CLI/web/VSCode event adapters
 src/
-├── main.rs      # CLI entry point and agent loop
-├── api.rs       # OpenRouter API client with SSE streaming
-├── tools.rs     # Tool definitions and execution (shell, write_file)
-├── types.rs     # Shared types for messages, tools, etc.
-└── ...
+├── main.rs           # CLI/web/vscode-stdio entry point
+├── tools.rs          # current local tool executor
+├── vscode.rs         # VSCode stdio bridge
+└── web.rs            # temporary web harness
 ```
 
 ## Contributing
