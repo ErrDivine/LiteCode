@@ -45,4 +45,4 @@ The Rust runtime uses the configured OpenAI-compatible model to segment actionab
 
 Agent profiles configure model names, skill ids, MCP server ids, tool allowlists, approval defaults, and PAVE vectors. They do not configure API credentials; all model calls still use `MARVIS_API_KEY` and `MARVIS_BASE_URL`.
 
-The runtime resolves built-in skills plus workspace skills from `.marvis/skills` and `.agents/skills`. MCP tools are exposed only after a configured stdio server is discovered successfully; missing or failing MCP servers produce an error instead of synthetic tools.
+The runtime resolves bundled Codex-style skill packages plus workspace skills from `.marvis/skills` and `.agents/skills`. MCP tools are exposed only after a configured stdio server is discovered successfully; missing or failing MCP servers produce an error instead of invented tools.

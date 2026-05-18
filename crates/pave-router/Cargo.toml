@@ -3,9 +3,9 @@ name = "pave-router"
 version = "0.1.0"
 edition = "2024"
 description = "PAVE vector routing for Marvis agent profiles"
+license = "MIT"
 
 [dependencies]
 serde = { workspace = true }
 status = { path = "../status" }
 thiserror = { workspace = true }
-

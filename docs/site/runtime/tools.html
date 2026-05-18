@@ -158,7 +158,7 @@
 <h2 id="public-types-and-functions"><a class="header" href="#public-types-and-functions">Public Types And Functions</a></h2>
 <div class="table-wrapper"><table><thead><tr><th>Item</th><th>Purpose</th></tr></thead><tbody>
 <tr><td><code>ToolResult</code></td><td>Internal result wrapper with <code>output: String</code>.</td></tr>
-<tr><td><code>ToolPolicy</code></td><td>Per-turn permissions for workspace writes, shell, risky shell, git writes, network-like commands, cwd, and timeout.</td></tr>
+<tr><td><code>ToolPolicy</code></td><td>Per-turn permissions for workspace writes, shell, risky shell, git writes, network-like commands, cwd, timeout, and selected skill packages.</td></tr>
 <tr><td><code>LocalToolExecutor</code></td><td>Implements <code>session_kernel::ToolExecutor</code> using a <code>ToolPolicy</code>, plus optional discovered MCP tools.</td></tr>
 <tr><td><code>tool_definitions_for_policy(policy)</code></td><td>Returns only the dynamic JSON schemas allowed by the current policy.</td></tr>
 <tr><td><code>execute_tool_with_policy(policy, name, input)</code></td><td>Dispatches tool execution by name and checks policy again at runtime.</td></tr>
@@ -170,6 +170,8 @@
 <li><code>MAX_SEARCH_MATCHES = 100</code></li>
 <li><code>MAX_FIND_RESULTS = 200</code></li>
 <li><code>MAX_WALK_DEPTH = 20</code></li>
+<li><code>MAX_READ_MANY_FILES = 12</code></li>
+<li><code>MAX_SKILL_RESOURCE_BYTES = 256_000</code></li>
 <li><code>SKIP_DIRS</code>: <code>.git</code>, <code>node_modules</code>, <code>target</code>, cache/build directories, and similar non-source directories.</li>
 </ul>
 <h2 id="exposed-tools"><a class="header" href="#exposed-tools">Exposed Tools</a></h2>
@@ -222,6 +224,31 @@
 <li>Rejects invalid UTF-8.</li>
 <li>Supports 1-based line offsets.</li>
 <li>Truncates output.</li>
+</ul>
+<h3 id="read_many_files"><a class="header" href="#read_many_files"><code>read_many_files</code></a></h3>
+<p>Reads several UTF-8 workspace files in one call.</p>
+<p>Parameters:</p>
+<ul>
+<li><code>paths: string[]</code>, maximum <code>12</code></li>
+<li>optional <code>limit_per_file: integer</code>, default <code>200</code></li>
+</ul>
+<p>Behavior:</p>
+<ul>
+<li>Uses the same workspace and UTF-8 protections as <code>read_file</code>.</li>
+<li>Returns each file under a path header with line numbers.</li>
+</ul>
+<h3 id="list_symbols"><a class="header" href="#list_symbols"><code>list_symbols</code></a></h3>
+<p>Returns a lightweight source outline.</p>
+<p>Parameters:</p>
+<ul>
+<li><code>path: string</code></li>
+<li>optional <code>limit: integer</code>, default <code>120</code></li>
+</ul>
+<p>Behavior:</p>
+<ul>
+<li>Restricts paths to the workspace.</li>
+<li>Recognizes common Rust, Python, JavaScript, TypeScript, and Markdown declarations.</li>
+<li>Intended for navigation, not language-server exactness.</li>
 </ul>
 <h3 id="edit_file"><a class="header" href="#edit_file"><code>edit_file</code></a></h3>
 <p>Replaces an exact string with new content.</p>
@@ -340,6 +367,15 @@
 <li>Require shell permission.</li>
 <li>Use allowlisted git commands only.</li>
 </ul>
+<h3 id="skill-package-tools"><a class="header" href="#skill-package-tools">Skill package tools</a></h3>
+<p>Selected routed agents can inspect equipped Codex-style skill packages:</p>
+<ul>
+<li><code>list_skills</code>: lists equipped skills, package roots, tool dependencies, and resource counts.</li>
+<li><code>list_skill_resources</code>: lists scripts, references, and assets for one equipped skill.</li>
+<li><code>read_skill_resource</code>: reads a declared text resource from an equipped skill package.</li>
+<li><code>run_skill_script</code>: runs a declared script directly, without shell string interpolation, and only appears with risky-shell approval.</li>
+</ul>
+<p>Skill tools never expose unequipped skills. Resource paths must be declared package resources and stay under the skill package root.</p>
 <h2 id="helper-functions"><a class="header" href="#helper-functions">Helper Functions</a></h2>
 <ul>
 <li><code>truncate_output</code></li>

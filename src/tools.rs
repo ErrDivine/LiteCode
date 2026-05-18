@@ -7,17 +7,22 @@ use serde_json::json;
 use session_kernel::{ToolExecutionResult, ToolExecutor};
 use std::collections::BTreeSet;
 use std::path::{Component, Path, PathBuf};
+use std::process::Stdio;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use tokio::io::AsyncWriteExt;
 use tokio::process::Command;
 use tokio::time::timeout;
 
-use crate::skill_mcp::McpToolRuntime;
+use crate::skill_mcp::{McpToolRuntime, SkillDescriptor, SkillScope};
 
 const MAX_OUTPUT_LEN: usize = 10_000;
 const MAX_SEARCH_MATCHES: usize = 100;
 const MAX_FIND_RESULTS: usize = 200;
 const MAX_WALK_DEPTH: usize = 20;
+const MAX_READ_MANY_FILES: usize = 12;
+const MAX_SKILL_RESOURCE_BYTES: u64 = 256_000;
+const MAX_SKILL_SCRIPT_STDIN_BYTES: usize = 64_000;
 const ROLLBACK_ROOT: &str = ".marvis/rollback";
 
 const SKIP_DIRS: &[&str] = &[
@@ -46,6 +51,7 @@ pub struct ToolPolicy {
     pub allow_git_write: bool,
     pub allow_network: bool,
     pub command_timeout_secs: u64,
+    pub selected_skills: Vec<SkillDescriptor>,
 }
 
 impl Default for ToolPolicy {
@@ -58,6 +64,7 @@ impl Default for ToolPolicy {
             allow_git_write: false,
             allow_network: false,
             command_timeout_secs: 120,
+            selected_skills: Vec::new(),
         }
     }
 }
@@ -154,6 +161,25 @@ pub fn tool_definitions_for_policy(policy: &ToolPolicy) -> Vec<DynamicToolSpec> 
             }),
         ),
         tool(
+            "read_many_files",
+            "Read several workspace text files in one call. Each file is returned with line numbers and a path header.",
+            json!({
+                "type": "object",
+                "properties": {
+                    "paths": {
+                        "type": "array",
+                        "items": { "type": "string" },
+                        "description": "Workspace-relative file paths to read. Maximum 12."
+                    },
+                    "limit_per_file": {
+                        "type": "integer",
+                        "description": "Maximum lines per file. Defaults to 200."
+                    }
+                },
+                "required": ["paths"]
+            }),
+        ),
+        tool(
             "list_directory",
             "List files and directories inside the workspace. Directories are shown with a trailing /.",
             json!({
@@ -191,6 +217,24 @@ pub fn tool_definitions_for_policy(policy: &ToolPolicy) -> Vec<DynamicToolSpec> 
                     }
                 },
                 "required": ["pattern"]
+            }),
+        ),
+        tool(
+            "list_symbols",
+            "Return a lightweight symbol outline for a workspace source file. Supports common Rust, Python, JavaScript, TypeScript, and Markdown declarations.",
+            json!({
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "Workspace-relative source file path"
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum symbols to return. Defaults to 120."
+                    }
+                },
+                "required": ["path"]
             }),
         ),
         tool(
@@ -290,6 +334,47 @@ pub fn tool_definitions_for_policy(policy: &ToolPolicy) -> Vec<DynamicToolSpec> 
                 "required": []
             }),
         ),
+        tool(
+            "list_skills",
+            "List the skill packages equipped for this agent turn, including package roots and resource counts.",
+            json!({
+                "type": "object",
+                "properties": {},
+                "required": []
+            }),
+        ),
+        tool(
+            "list_skill_resources",
+            "List scripts, references, and assets declared by an equipped skill package.",
+            json!({
+                "type": "object",
+                "properties": {
+                    "skill": {
+                        "type": "string",
+                        "description": "Equipped skill id or name"
+                    }
+                },
+                "required": ["skill"]
+            }),
+        ),
+        tool(
+            "read_skill_resource",
+            "Read a text resource from an equipped skill package. The path must be one of the package resources.",
+            json!({
+                "type": "object",
+                "properties": {
+                    "skill": {
+                        "type": "string",
+                        "description": "Equipped skill id or name"
+                    },
+                    "path": {
+                        "type": "string",
+                        "description": "Resource path relative to the skill package root"
+                    }
+                },
+                "required": ["skill", "path"]
+            }),
+        ),
     ];
 
     if policy.allow_shell {
@@ -305,6 +390,36 @@ pub fn tool_definitions_for_policy(policy: &ToolPolicy) -> Vec<DynamicToolSpec> 
                     }
                 },
                 "required": ["command"]
+            }),
+        ));
+    }
+
+    if policy.allow_risky_shell && !policy.selected_skills.is_empty() {
+        tools.push(tool(
+            "run_skill_script",
+            "Run a script declared by an equipped skill package. Requires risky-shell approval because scripts are executable code.",
+            json!({
+                "type": "object",
+                "properties": {
+                    "skill": {
+                        "type": "string",
+                        "description": "Equipped skill id or name"
+                    },
+                    "path": {
+                        "type": "string",
+                        "description": "Script path relative to the skill package root, usually under scripts/"
+                    },
+                    "args": {
+                        "type": "array",
+                        "items": { "type": "string" },
+                        "description": "Arguments passed directly to the script"
+                    },
+                    "stdin": {
+                        "type": "string",
+                        "description": "Optional stdin text passed to the script"
+                    }
+                },
+                "required": ["skill", "path"]
             }),
         ));
     }
@@ -544,13 +659,19 @@ pub async fn execute_tool_with_policy(
         "shell" => execute_shell(policy, input).await,
         "write_file" => execute_write_file(policy, input),
         "read_file" => execute_read_file(policy, input),
+        "read_many_files" => execute_read_many_files(policy, input),
         "edit_file" => execute_edit_file(policy, input),
         "apply_patch" => execute_apply_patch(policy, input).await,
         "list_rollbacks" => execute_list_rollbacks(policy, input),
         "restore_rollback" => execute_restore_rollback(policy, input),
         "list_directory" => execute_list_directory(policy, input),
         "search_files" => execute_search_files(policy, input),
+        "list_symbols" => execute_list_symbols(policy, input),
         "find_files" => execute_find_files(policy, input),
+        "list_skills" => execute_list_skills(policy),
+        "list_skill_resources" => execute_list_skill_resources(policy, input),
+        "read_skill_resource" => execute_read_skill_resource(policy, input),
+        "run_skill_script" => execute_run_skill_script(policy, input).await,
         "git_status" => execute_git_status(policy).await,
         "git_diff" => execute_git_diff(policy, input).await,
         "run_test" => {
@@ -1018,6 +1139,399 @@ fn execute_read_file(policy: &ToolPolicy, input: &serde_json::Value) -> ToolResu
             output: format!("Failed to read file: {e}"),
         },
     }
+}
+
+fn execute_read_many_files(policy: &ToolPolicy, input: &serde_json::Value) -> ToolResult {
+    let paths = match input.get("paths").and_then(|value| value.as_array()) {
+        Some(paths) if !paths.is_empty() => paths,
+        _ => {
+            return ToolResult {
+                output: "Missing 'paths' parameter".into(),
+            };
+        }
+    };
+    if paths.len() > MAX_READ_MANY_FILES {
+        return blocked(format!(
+            "read_many_files accepts at most {MAX_READ_MANY_FILES} paths"
+        ));
+    }
+    let limit = parse_usize_param(input, "limit_per_file").unwrap_or(200);
+    let mut output = String::new();
+    for path_value in paths {
+        let Some(path) = path_value.as_str() else {
+            return ToolResult {
+                output: "All paths must be strings".into(),
+            };
+        };
+        output.push_str(&format!("===== {path} =====\n"));
+        let result = execute_read_file(policy, &json!({ "path": path, "limit": limit }));
+        output.push_str(&result.output);
+        if !output.ends_with('\n') {
+            output.push('\n');
+        }
+    }
+    ToolResult {
+        output: truncate_output(output),
+    }
+}
+
+fn execute_list_symbols(policy: &ToolPolicy, input: &serde_json::Value) -> ToolResult {
+    let path = match input.get("path").and_then(|value| value.as_str()) {
+        Some(path) => path,
+        None => {
+            return ToolResult {
+                output: "Missing 'path' parameter".into(),
+            };
+        }
+    };
+    let limit = parse_usize_param(input, "limit").unwrap_or(120).max(1);
+    let file_path = match resolve_workspace_path(policy, path) {
+        Ok(path) => path,
+        Err(err) => return blocked(err.to_string()),
+    };
+    let content = match std::fs::read_to_string(&file_path) {
+        Ok(content) => content,
+        Err(err) => {
+            return ToolResult {
+                output: format!("Failed to read file: {err}"),
+            };
+        }
+    };
+
+    let extension = file_path.extension().and_then(|value| value.to_str());
+    let mut symbols = Vec::new();
+    for (index, line) in content.lines().enumerate() {
+        if let Some(symbol) = symbol_from_line(extension, line) {
+            symbols.push(format!("{}:{}: {}", path, index + 1, symbol));
+            if symbols.len() >= limit {
+                break;
+            }
+        }
+    }
+
+    if symbols.is_empty() {
+        ToolResult {
+            output: "No symbols found.".to_string(),
+        }
+    } else {
+        ToolResult {
+            output: symbols.join("\n"),
+        }
+    }
+}
+
+fn symbol_from_line(extension: Option<&str>, line: &str) -> Option<String> {
+    let trimmed = line.trim_start();
+    if trimmed.is_empty() {
+        return None;
+    }
+    if matches!(extension, Some("md" | "markdown")) && trimmed.starts_with('#') {
+        return Some(trimmed.to_string());
+    }
+
+    let patterns = match extension {
+        Some("rs") => &[
+            r"^(?:pub(?:\([^)]*\))?\s+)?(?:async\s+)?fn\s+([A-Za-z_][A-Za-z0-9_]*)",
+            r"^(?:pub(?:\([^)]*\))?\s+)?(?:struct|enum|trait|mod|type|const|static)\s+([A-Za-z_][A-Za-z0-9_]*)",
+            r"^impl(?:<[^>]+>)?\s+(.+)",
+        ][..],
+        Some("py") => &[
+            r"^(?:async\s+)?def\s+([A-Za-z_][A-Za-z0-9_]*)",
+            r"^class\s+([A-Za-z_][A-Za-z0-9_]*)",
+        ][..],
+        Some("js" | "jsx" | "ts" | "tsx") => &[
+            r"^(?:export\s+)?(?:async\s+)?function\s+([A-Za-z_$][A-Za-z0-9_$]*)",
+            r"^(?:export\s+)?(?:class|interface|type)\s+([A-Za-z_$][A-Za-z0-9_$]*)",
+            r"^(?:export\s+)?(?:const|let|var)\s+([A-Za-z_$][A-Za-z0-9_$]*)",
+        ][..],
+        _ => &[
+            r"^(?:function|class|def|struct|enum|trait|interface|type)\s+([A-Za-z_][A-Za-z0-9_]*)",
+        ][..],
+    };
+
+    for pattern in patterns {
+        let regex = Regex::new(pattern).ok()?;
+        if let Some(captures) = regex.captures(trimmed) {
+            let name = captures
+                .get(1)
+                .map(|value| value.as_str())
+                .unwrap_or(trimmed);
+            return Some(name.trim().to_string());
+        }
+    }
+    None
+}
+
+fn execute_list_skills(policy: &ToolPolicy) -> ToolResult {
+    let skills = policy
+        .selected_skills
+        .iter()
+        .map(|skill| {
+            let scripts = skill
+                .resources
+                .iter()
+                .filter(|resource| {
+                    resource.kind == crate::skills::SkillResourceKind::Script
+                })
+                .count();
+            let references = skill
+                .resources
+                .iter()
+                .filter(|resource| {
+                    resource.kind == crate::skills::SkillResourceKind::Reference
+                })
+                .count();
+            let assets = skill
+                .resources
+                .iter()
+                .filter(|resource| resource.kind == crate::skills::SkillResourceKind::Asset)
+                .count();
+            json!({
+                "id": skill.id,
+                "name": skill.name,
+                "description": skill.description,
+                "scope": skill.scope,
+                "path": skill.path,
+                "package_root": skill.package_root,
+                "local_tools": skill.local_tools,
+                "mcp_servers": skill.mcp_dependencies.iter().map(|dependency| dependency.value.clone()).collect::<Vec<_>>(),
+                "resources": {
+                    "scripts": scripts,
+                    "references": references,
+                    "assets": assets
+                }
+            })
+        })
+        .collect::<Vec<_>>();
+    ToolResult {
+        output: serde_json::to_string_pretty(&skills).unwrap_or_else(|_| "[]".to_string()),
+    }
+}
+
+fn execute_list_skill_resources(policy: &ToolPolicy, input: &serde_json::Value) -> ToolResult {
+    let skill = match input.get("skill").and_then(|value| value.as_str()) {
+        Some(skill) => skill,
+        None => {
+            return ToolResult {
+                output: "Missing 'skill' parameter".into(),
+            };
+        }
+    };
+    let skill = match find_selected_skill(policy, skill) {
+        Some(skill) => skill,
+        None => return blocked(format!("skill `{skill}` is not equipped for this turn")),
+    };
+    let resources = skill
+        .resources
+        .iter()
+        .map(|resource| {
+            json!({
+                "kind": resource.kind,
+                "path": resource.relative_path,
+                "bytes": resource.bytes,
+            })
+        })
+        .collect::<Vec<_>>();
+    ToolResult {
+        output: serde_json::to_string_pretty(&resources).unwrap_or_else(|_| "[]".to_string()),
+    }
+}
+
+fn execute_read_skill_resource(policy: &ToolPolicy, input: &serde_json::Value) -> ToolResult {
+    let skill_name = match input.get("skill").and_then(|value| value.as_str()) {
+        Some(skill) => skill,
+        None => {
+            return ToolResult {
+                output: "Missing 'skill' parameter".into(),
+            };
+        }
+    };
+    let relative_path = match input.get("path").and_then(|value| value.as_str()) {
+        Some(path) => path,
+        None => {
+            return ToolResult {
+                output: "Missing 'path' parameter".into(),
+            };
+        }
+    };
+    let skill = match find_selected_skill(policy, skill_name) {
+        Some(skill) => skill,
+        None => {
+            return blocked(format!(
+                "skill `{skill_name}` is not equipped for this turn"
+            ));
+        }
+    };
+    let path = match skill.resource_path(relative_path) {
+        Ok(path) => path,
+        Err(err) => return blocked(err.to_string()),
+    };
+    let metadata = match std::fs::metadata(&path) {
+        Ok(metadata) => metadata,
+        Err(err) => {
+            return ToolResult {
+                output: format!("Failed to stat skill resource: {err}"),
+            };
+        }
+    };
+    if metadata.len() > MAX_SKILL_RESOURCE_BYTES {
+        return blocked(format!(
+            "skill resource is {} bytes; maximum readable size is {MAX_SKILL_RESOURCE_BYTES}",
+            metadata.len()
+        ));
+    }
+    match std::fs::read_to_string(&path) {
+        Ok(content) => ToolResult {
+            output: truncate_output(content),
+        },
+        Err(err) => ToolResult {
+            output: format!("Failed to read skill resource as UTF-8 text: {err}"),
+        },
+    }
+}
+
+async fn execute_run_skill_script(policy: &ToolPolicy, input: &serde_json::Value) -> ToolResult {
+    if !policy.allow_risky_shell {
+        return blocked("run_skill_script requires risky-shell approval");
+    }
+    let skill_name = match input.get("skill").and_then(|value| value.as_str()) {
+        Some(skill) => skill,
+        None => {
+            return ToolResult {
+                output: "Missing 'skill' parameter".into(),
+            };
+        }
+    };
+    let relative_path = match input.get("path").and_then(|value| value.as_str()) {
+        Some(path) => path,
+        None => {
+            return ToolResult {
+                output: "Missing 'path' parameter".into(),
+            };
+        }
+    };
+    let skill = match find_selected_skill(policy, skill_name) {
+        Some(skill) => skill,
+        None => {
+            return blocked(format!(
+                "skill `{skill_name}` is not equipped for this turn"
+            ));
+        }
+    };
+    if skill.scope == SkillScope::Workspace && !policy.allow_risky_shell {
+        return blocked("workspace skill scripts require risky-shell approval");
+    }
+    let script_path = match skill.script_path(relative_path) {
+        Ok(path) => path,
+        Err(err) => return blocked(err.to_string()),
+    };
+    let args = match input.get("args") {
+        Some(value) => match value.as_array() {
+            Some(values) => values
+                .iter()
+                .map(|value| value.as_str().map(str::to_string))
+                .collect::<Option<Vec<_>>>(),
+            None => None,
+        },
+        None => Some(Vec::new()),
+    };
+    let Some(args) = args else {
+        return ToolResult {
+            output: "args must be an array of strings".to_string(),
+        };
+    };
+    let stdin_text = input
+        .get("stdin")
+        .and_then(|value| value.as_str())
+        .map(str::to_string);
+    if stdin_text
+        .as_ref()
+        .is_some_and(|text| text.len() > MAX_SKILL_SCRIPT_STDIN_BYTES)
+    {
+        return blocked(format!(
+            "stdin exceeds {MAX_SKILL_SCRIPT_STDIN_BYTES} bytes"
+        ));
+    }
+
+    let mut command = skill_script_command(&script_path);
+    command
+        .args(args)
+        .current_dir(&policy.cwd)
+        .env("MARVIS_WORKSPACE_ROOT", &policy.cwd)
+        .env("MARVIS_SKILL_DIR", &skill.package_root)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    if stdin_text.is_some() {
+        command.stdin(Stdio::piped());
+    }
+
+    let mut child = match command.spawn() {
+        Ok(child) => child,
+        Err(err) => {
+            return ToolResult {
+                output: format!("Failed to spawn skill script: {err}"),
+            };
+        }
+    };
+    if let Some(stdin_text) = stdin_text
+        && let Some(mut stdin) = child.stdin.take()
+        && let Err(err) = stdin.write_all(stdin_text.as_bytes()).await
+    {
+        return ToolResult {
+            output: format!("Failed to write skill script stdin: {err}"),
+        };
+    }
+    match timeout(
+        Duration::from_secs(policy.command_timeout_secs.max(1)),
+        child.wait_with_output(),
+    )
+    .await
+    {
+        Ok(Ok(output)) => output_to_tool_result(output),
+        Ok(Err(err)) => ToolResult {
+            output: format!("Failed to run skill script: {err}"),
+        },
+        Err(_) => ToolResult {
+            output: format!(
+                "skill script timed out after {} seconds",
+                policy.command_timeout_secs
+            ),
+        },
+    }
+}
+
+fn skill_script_command(script_path: &Path) -> Command {
+    match script_path.extension().and_then(|value| value.to_str()) {
+        Some("py") => {
+            let mut command = Command::new("python3");
+            command.arg(script_path);
+            command
+        }
+        Some("js") => {
+            let mut command = Command::new("node");
+            command.arg(script_path);
+            command
+        }
+        Some("sh") => {
+            let mut command = Command::new("sh");
+            command.arg(script_path);
+            command
+        }
+        _ => Command::new(script_path),
+    }
+}
+
+fn find_selected_skill<'a>(policy: &'a ToolPolicy, name: &str) -> Option<&'a SkillDescriptor> {
+    let normalized = name.trim();
+    policy.selected_skills.iter().find(|skill| {
+        skill.id == normalized
+            || skill.name == normalized
+            || skill
+                .interface
+                .as_ref()
+                .and_then(|interface| interface.display_name.as_deref())
+                == Some(normalized)
+    })
 }
 
 // ─── edit_file ──────────────────────────────────────────────────────────────
@@ -1903,6 +2417,7 @@ fn execute_find_files(policy: &ToolPolicy, input: &serde_json::Value) -> ToolRes
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::skills::{SkillResource, SkillResourceKind};
 
     fn test_policy(allow_workspace_write: bool) -> ToolPolicy {
         let root = std::env::temp_dir().join(format!("marvis-tools-test-{}", std::process::id()));
@@ -1915,7 +2430,47 @@ mod tests {
             allow_git_write: false,
             allow_network: false,
             command_timeout_secs: 10,
+            selected_skills: Vec::new(),
         }
+    }
+
+    fn equipped_skill_policy() -> ToolPolicy {
+        let mut policy = test_policy(false);
+        let skill_root = policy.cwd.join("skill-package");
+        std::fs::create_dir_all(skill_root.join("references")).unwrap();
+        std::fs::create_dir_all(skill_root.join("scripts")).unwrap();
+        std::fs::write(skill_root.join("references/guide.md"), "Read this guide.").unwrap();
+        std::fs::write(skill_root.join("scripts/helper.py"), "print('ok')").unwrap();
+        policy.selected_skills = vec![SkillDescriptor {
+            id: "demo-skill".to_string(),
+            name: "Demo Skill".to_string(),
+            description: "Demo package.".to_string(),
+            short_description: None,
+            interface: None,
+            policy: None,
+            path: Some(skill_root.join("SKILL.md")),
+            package_root: skill_root,
+            scope: SkillScope::Workspace,
+            body: "---\nname: demo-skill\ndescription: Demo package.\n---\nBody.".to_string(),
+            local_tools: vec![
+                "list_skill_resources".to_string(),
+                "read_skill_resource".to_string(),
+            ],
+            mcp_dependencies: Vec::new(),
+            resources: vec![
+                SkillResource {
+                    kind: SkillResourceKind::Reference,
+                    relative_path: PathBuf::from("references/guide.md"),
+                    bytes: 16,
+                },
+                SkillResource {
+                    kind: SkillResourceKind::Script,
+                    relative_path: PathBuf::from("scripts/helper.py"),
+                    bytes: 11,
+                },
+            ],
+        }];
+        policy
     }
 
     #[tokio::test]
@@ -1934,6 +2489,66 @@ mod tests {
         )
         .await;
         assert!(result.output.contains("Blocked by Marvis policy"));
+    }
+
+    #[test]
+    fn read_many_files_and_list_symbols_work_inside_workspace() {
+        let policy = test_policy(false);
+        std::fs::write(
+            policy.cwd.join("lib.rs"),
+            "pub struct Demo;\n\nimpl Demo {\n    pub fn run(&self) {}\n}\n",
+        )
+        .unwrap();
+        std::fs::write(policy.cwd.join("mod.rs"), "fn helper() {}\n").unwrap();
+
+        let many = execute_read_many_files(
+            &policy,
+            &json!({
+                "paths": ["lib.rs", "mod.rs"],
+                "limit_per_file": 20
+            }),
+        );
+        assert!(many.output.contains("===== lib.rs ====="));
+        assert!(many.output.contains("pub struct Demo"));
+
+        let symbols = execute_list_symbols(&policy, &json!({ "path": "lib.rs" }));
+        assert!(symbols.output.contains("lib.rs:1: Demo"));
+        assert!(symbols.output.contains("lib.rs:3: Demo {"));
+    }
+
+    #[tokio::test]
+    async fn skill_resource_tools_are_scoped_to_equipped_skills() {
+        let policy = equipped_skill_policy();
+        let listed = execute_list_skill_resources(&policy, &json!({ "skill": "demo-skill" }));
+        assert!(listed.output.contains("references/guide.md"));
+
+        let read = execute_read_skill_resource(
+            &policy,
+            &json!({
+                "skill": "Demo Skill",
+                "path": "references/guide.md"
+            }),
+        );
+        assert_eq!(read.output, "Read this guide.");
+
+        let blocked = execute_read_skill_resource(
+            &policy,
+            &json!({
+                "skill": "demo-skill",
+                "path": "../Cargo.toml"
+            }),
+        );
+        assert!(blocked.output.contains("Blocked by Marvis policy"));
+
+        let script = execute_run_skill_script(
+            &policy,
+            &json!({
+                "skill": "demo-skill",
+                "path": "scripts/helper.py"
+            }),
+        )
+        .await;
+        assert!(script.output.contains("risky-shell approval"));
     }
 
     #[tokio::test]

@@ -154,21 +154,28 @@
                 <div id="content" class="content">
                     <main>
                         <h1 id="skill-and-mcp-runtime"><a class="header" href="#skill-and-mcp-runtime">Skill And MCP Runtime</a></h1>
-<p><code>src/skill_mcp.rs</code> is the runtime layer that turns a routed agent profile into concrete skills and MCP tools.</p>
+<p><code>src/skill_mcp.rs</code> resolves routed agent profiles, while <code>src/skills.rs</code> owns Codex-style skill package loading. Skills and tools are separate layers: skills are archived instruction packages, local tool functions and MCP tools are the execution layer.</p>
 <h2 id="skills"><a class="header" href="#skills">Skills</a></h2>
 <p>The registry loads:</p>
 <ul>
-<li>built-in skills: <code>rust-diagnostic-repair</code>, <code>test-failure-triage</code>, and <code>repo-explainer</code></li>
+<li>bundled system skill packages: <code>rust-diagnostic-repair</code>, <code>test-failure-triage</code>, and <code>repo-explainer</code></li>
 <li>workspace skills under <code>.marvis/skills/**/SKILL.md</code></li>
 <li>Codex-compatible workspace skills under <code>.agents/skills/**/SKILL.md</code></li>
 </ul>
-<p>Each <code>SKILL.md</code> must start with YAML-style frontmatter containing at least <code>name</code> and <code>description</code>. An optional <code>id</code> overrides the normalized skill id.</p>
+<p>Bundled system skills are real packages with <code>SKILL.md</code>, <code>agents/openai.yaml</code>, <code>references/</code>, and <code>scripts/</code>. At runtime Marvis materializes them under <code>.lite-code/skills/.system</code> and loads them through the same package loader used for workspace skills.</p>
+<p>Each <code>SKILL.md</code> must start with YAML-style frontmatter containing at least <code>name</code> and <code>description</code>. An optional <code>id</code> overrides the normalized skill id. Skill packages can include:</p>
+<ul>
+<li><code>references/</code>: read-only Markdown or text references</li>
+<li><code>scripts/</code>: script utilities that can run only when risky-shell approval is present</li>
+<li><code>assets/</code>: package assets such as icons or templates</li>
+</ul>
 <p>Optional metadata can live at <code>agents/openai.json</code> or <code>agents/openai.yaml</code> next to the skill file. Marvis reads:</p>
 <ul>
-<li><code>capabilities</code>: local tool names the skill can use</li>
-<li><code>dependencies.tools</code>: MCP dependencies with <code>type: mcp</code>, <code>value</code>, <code>transport: stdio</code>, <code>command</code>, and optional <code>args</code></li>
+<li><code>dependencies.tools</code> entries with <code>type: local</code>, <code>tool</code>, <code>local_tool</code>, or <code>function</code> as local tool dependencies</li>
+<li><code>dependencies.tools</code> entries with <code>type: mcp</code>, <code>value</code>, <code>transport: stdio</code>, <code>command</code>, and optional <code>args</code></li>
+<li>legacy <code>capabilities</code> as local tool dependencies</li>
 </ul>
-<p>Agent profiles name skills through <code>skills: ["skill-id"]</code>. The active local tool list is capped by both the agent profile allowlist and the selected skill capabilities.</p>
+<p>Agent profiles name skills through <code>skills: ["skill-id"]</code>. The active local tool list is capped by both the agent profile allowlist and the selected skill's local tool dependencies. Selected skill bodies are injected into the system prompt, and equipped agents can use <code>list_skills</code>, <code>list_skill_resources</code>, and <code>read_skill_resource</code> to inspect package resources.</p>
 <h2 id="mcp"><a class="header" href="#mcp">MCP</a></h2>
 <p>The MCP runtime reads stdio server config from <code>.marvis/mcp.json</code> and <code>.mcp.json</code>.</p>
 <pre><code class="language-json">{
@@ -184,7 +191,7 @@
 }
 </code></pre>
 <p>Before an agent turn starts, Marvis initializes each selected MCP server, sends <code>tools/list</code>, and exposes only discovered tools. Because stdio MCP startup launches a local process, selected MCP servers require shell approval for that accepted turn. Tool names are qualified as <code>mcp__server__tool</code> and capped to the Responses API name length. Tool calls go back through the same stdio JSON-RPC path with <code>tools/call</code>.</p>
-<p>Missing or failing MCP servers fail closed for selected agents. Marvis does not synthesize MCP tools.</p>
+<p>Missing, disabled, failing, or tool-less required MCP servers fail closed for selected agents. Marvis does not synthesize MCP tools.</p>
 
                     </main>
 

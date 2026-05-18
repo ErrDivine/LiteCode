@@ -399,6 +399,7 @@ impl VscodeServer {
             allow_git_write: approval.allow_git_write,
             allow_network: approval.allow_network,
             command_timeout_secs: 120,
+            selected_skills: Vec::new(),
         };
         self.skill_registry = SkillRegistry::load(&self.workspace_root);
         let skill_selection = if let Some(agent) = &agent {
@@ -407,6 +408,10 @@ impl VscodeServer {
             selection
         } else {
             Default::default()
+        };
+        let tool_policy = ToolPolicy {
+            selected_skills: skill_selection.skills.clone(),
+            ..tool_policy
         };
         if !skill_selection.mcp_servers.is_empty() && !approval.allow_shell {
             return Err(anyhow!(

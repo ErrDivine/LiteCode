@@ -12,13 +12,14 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader, Lines};
 use tokio::process::{Child, ChildStdout, Command};
 use tokio::time::timeout;
 
-const SKILL_FILE_NAME: &str = "SKILL.md";
-const MAX_SKILL_SCAN_DEPTH: usize = 6;
 const MAX_TOOL_NAME_LENGTH: usize = 64;
 const MCP_TOOL_NAME_PREFIX: &str = "mcp";
 const MCP_TOOL_NAME_DELIMITER: &str = "__";
 const DEFAULT_MCP_STARTUP_TIMEOUT_SECS: u64 = 30;
 const DEFAULT_MCP_TOOL_TIMEOUT_SECS: u64 = 120;
+
+pub use crate::skills::{SkillDescriptor, SkillScope, SkillToolDependency};
+use crate::skills::{load_skill_packages, render_selected_skills_section};
 
 #[derive(Debug, Clone, Default)]
 pub struct SkillRegistry {
@@ -30,13 +31,13 @@ pub struct SkillRegistry {
 impl SkillRegistry {
     pub fn load(workspace_root: &Path) -> Self {
         let mut registry = Self::default();
-        for skill in built_in_skills() {
+        let skill_outcome = load_skill_packages(workspace_root);
+        registry.errors.extend(skill_outcome.errors);
+        for skill in skill_outcome.skills {
             registry.skills.insert(skill.id.clone(), skill);
         }
         registry.load_mcp_config(&workspace_root.join(".marvis/mcp.json"));
         registry.load_mcp_config(&workspace_root.join(".mcp.json"));
-        registry.load_skills_root(&workspace_root.join(".marvis/skills"));
-        registry.load_skills_root(&workspace_root.join(".agents/skills"));
         registry.merge_skill_mcp_dependencies();
         registry
     }
@@ -48,13 +49,13 @@ impl SkillRegistry {
     pub fn resolve_agent(&self, agent: &AgentProfile) -> AgentSkillSelection {
         let mut skills = Vec::new();
         let mut missing_skills = Vec::new();
-        let mut skill_capabilities = BTreeSet::new();
+        let mut skill_local_tools = BTreeSet::new();
         let mut mcp_server_names = BTreeSet::new();
 
         for skill_id in &agent.skills {
             match self.skills.get(skill_id) {
                 Some(skill) => {
-                    skill_capabilities.extend(skill.capabilities.iter().cloned());
+                    skill_local_tools.extend(skill.local_tools.iter().cloned());
                     for dependency in &skill.mcp_dependencies {
                         if dependency.kind.eq_ignore_ascii_case("mcp") {
                             mcp_server_names.insert(dependency.value.clone());
@@ -74,12 +75,12 @@ impl SkillRegistry {
             .cloned()
             .collect::<BTreeSet<_>>();
         let local_tool_allowlist =
-            match (profile_allowlist.is_empty(), skill_capabilities.is_empty()) {
+            match (profile_allowlist.is_empty(), skill_local_tools.is_empty()) {
                 (true, true) => Vec::new(),
-                (true, false) => skill_capabilities.into_iter().collect(),
+                (true, false) => skill_local_tools.into_iter().collect(),
                 (false, true) => profile_allowlist.into_iter().collect(),
                 (false, false) => profile_allowlist
-                    .intersection(&skill_capabilities)
+                    .intersection(&skill_local_tools)
                     .cloned()
                     .collect(),
             };
@@ -103,58 +104,6 @@ impl SkillRegistry {
             mcp_servers,
             missing_skills,
             missing_mcp_servers,
-        }
-    }
-
-    fn load_skills_root(&mut self, root: &Path) {
-        if !root.is_dir() {
-            return;
-        }
-        self.discover_skills(root, 0);
-    }
-
-    fn discover_skills(&mut self, dir: &Path, depth: usize) {
-        if depth > MAX_SKILL_SCAN_DEPTH {
-            return;
-        }
-        let entries = match std::fs::read_dir(dir) {
-            Ok(entries) => entries,
-            Err(err) => {
-                self.errors.push(format!(
-                    "failed to read skills dir {}: {err}",
-                    dir.display()
-                ));
-                return;
-            }
-        };
-        for entry in entries {
-            let entry = match entry {
-                Ok(entry) => entry,
-                Err(err) => {
-                    self.errors.push(format!(
-                        "failed to read skill entry in {}: {err}",
-                        dir.display()
-                    ));
-                    continue;
-                }
-            };
-            let path = entry.path();
-            let file_name = entry.file_name();
-            if file_name.to_string_lossy().starts_with('.') {
-                continue;
-            }
-            if path.is_dir() {
-                self.discover_skills(&path, depth + 1);
-            } else if path.is_file() && file_name == SKILL_FILE_NAME {
-                match parse_skill_file(&path) {
-                    Ok(skill) => {
-                        self.skills.insert(skill.id.clone(), skill);
-                    }
-                    Err(err) => self
-                        .errors
-                        .push(format!("failed to load skill {}: {err}", path.display())),
-                }
-            }
         }
     }
 
@@ -241,55 +190,8 @@ impl AgentSkillSelection {
     }
 
     pub fn render_skills_section(&self) -> Option<String> {
-        if self.skills.is_empty() {
-            return None;
-        }
-        let mut out = String::from("Selected Marvis skills:\n");
-        for skill in &self.skills {
-            out.push_str("<skill>\n");
-            out.push_str(&format!("<name>{}</name>\n", skill.id));
-            if let Some(path) = &skill.path {
-                out.push_str(&format!("<path>{}</path>\n", path.display()));
-            }
-            out.push_str(&skill.body);
-            if !skill.body.ends_with('\n') {
-                out.push('\n');
-            }
-            out.push_str("</skill>\n");
-        }
-        Some(out)
+        render_selected_skills_section(&self.skills)
     }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct SkillDescriptor {
-    pub id: String,
-    pub name: String,
-    pub description: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub path: Option<PathBuf>,
-    pub body: String,
-    #[serde(default)]
-    pub capabilities: Vec<String>,
-    #[serde(default)]
-    pub mcp_dependencies: Vec<SkillToolDependency>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct SkillToolDependency {
-    #[serde(rename = "type")]
-    pub kind: String,
-    pub value: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub description: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub transport: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub command: Option<String>,
-    #[serde(default)]
-    pub args: Vec<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub url: Option<String>,
 }
 
 impl SkillToolDependency {
@@ -416,7 +318,16 @@ impl McpToolRuntime {
 
         let mut runtime = Self::default();
         let mut used_names = BTreeSet::new();
-        for server in servers.into_iter().filter(|server| server.enabled) {
+        for server in servers {
+            if !server.enabled {
+                if server.required {
+                    return Err(anyhow!(
+                        "required MCP server `{}` is disabled in configuration",
+                        server.name
+                    ));
+                }
+                continue;
+            }
             let result = list_mcp_tools(workspace_root, &server).await;
             let tools = match result {
                 Ok(tools) => tools,
@@ -428,6 +339,7 @@ impl McpToolRuntime {
                 }
                 Err(_) => continue,
             };
+            let mut exposed_count = 0usize;
             for tool in tools {
                 if !server.allows_tool(&tool.name) {
                     continue;
@@ -444,6 +356,13 @@ impl McpToolRuntime {
                         input_schema: tool.input_schema,
                     },
                 );
+                exposed_count += 1;
+            }
+            if server.required && exposed_count == 0 {
+                return Err(anyhow!(
+                    "required MCP server `{}` exposed no usable tools",
+                    server.name
+                ));
             }
             runtime.servers.insert(server.name.clone(), server);
         }
@@ -550,27 +469,6 @@ struct McpServerFile {
     tool_timeout_sec: Option<u64>,
 }
 
-#[derive(Debug, Clone, Default, Deserialize)]
-struct SkillMetadataFile {
-    #[serde(default)]
-    capabilities: Vec<String>,
-    #[serde(default)]
-    dependencies: SkillDependenciesFile,
-}
-
-#[derive(Debug, Clone, Default, Deserialize)]
-struct SkillDependenciesFile {
-    #[serde(default)]
-    tools: Vec<SkillToolDependency>,
-}
-
-#[derive(Debug, Clone)]
-struct SkillFrontmatter {
-    id: Option<String>,
-    name: Option<String>,
-    description: Option<String>,
-}
-
 #[derive(Debug, Clone, Deserialize)]
 struct JsonRpcResponse {
     id: Option<Value>,
@@ -591,287 +489,6 @@ struct McpToolDefinition {
     description: Option<String>,
     #[serde(default, alias = "inputSchema")]
     input_schema: Option<Value>,
-}
-
-fn built_in_skills() -> Vec<SkillDescriptor> {
-    vec![
-        SkillDescriptor {
-            id: "rust-diagnostic-repair".to_string(),
-            name: "Rust Diagnostic Repair".to_string(),
-            description: "Repair Rust compiler diagnostics and failing tests with small verified patches.".to_string(),
-            path: None,
-            body: "Focus on Rust diagnostics, borrow checker messages, failing tests, and small localized patches. Prefer read_file/search_files before editing, apply_patch for edits, and run_build/run_test for verification.".to_string(),
-            capabilities: vec![
-                "read_file",
-                "search_files",
-                "find_files",
-                "list_directory",
-                "apply_patch",
-                "run_test",
-                "run_build",
-                "git_diff",
-                "git_status",
-            ]
-            .into_iter()
-            .map(str::to_string)
-            .collect(),
-            mcp_dependencies: Vec::new(),
-        },
-        SkillDescriptor {
-            id: "test-failure-triage".to_string(),
-            name: "Test Failure Triage".to_string(),
-            description: "Inspect failing behavior and choose the smallest useful verification path.".to_string(),
-            path: None,
-            body: "Focus on recent command failures, test output, and the smallest reproducible check. Avoid edits unless the user or routed profile explicitly grants workspace writes.".to_string(),
-            capabilities: vec![
-                "read_file",
-                "search_files",
-                "find_files",
-                "list_directory",
-                "run_test",
-                "git_diff",
-                "git_status",
-            ]
-            .into_iter()
-            .map(str::to_string)
-            .collect(),
-            mcp_dependencies: Vec::new(),
-        },
-        SkillDescriptor {
-            id: "repo-explainer".to_string(),
-            name: "Repo Explainer".to_string(),
-            description: "Explain repository structure and code relationships without editing.".to_string(),
-            path: None,
-            body: "Read the relevant files, summarize concrete relationships, and avoid edits or shell commands unless the user changes the task.".to_string(),
-            capabilities: vec![
-                "read_file",
-                "search_files",
-                "find_files",
-                "list_directory",
-                "git_diff",
-                "git_status",
-            ]
-            .into_iter()
-            .map(str::to_string)
-            .collect(),
-            mcp_dependencies: Vec::new(),
-        },
-    ]
-}
-
-fn parse_skill_file(path: &Path) -> Result<SkillDescriptor> {
-    let body = std::fs::read_to_string(path).with_context(|| format!("read {}", path.display()))?;
-    let (frontmatter, _body_without_frontmatter) =
-        extract_frontmatter(&body).ok_or_else(|| anyhow!("missing YAML frontmatter"))?;
-    let frontmatter = parse_skill_frontmatter(frontmatter)?;
-    let name = frontmatter
-        .name
-        .clone()
-        .or_else(|| {
-            path.parent()
-                .and_then(Path::file_name)
-                .map(|name| name.to_string_lossy().to_string())
-        })
-        .ok_or_else(|| anyhow!("missing skill name"))?;
-    let id = frontmatter
-        .id
-        .clone()
-        .unwrap_or_else(|| normalize_identifier(&name));
-    let description = frontmatter
-        .description
-        .clone()
-        .ok_or_else(|| anyhow!("missing skill description"))?;
-    let metadata = load_skill_metadata(path)?;
-    Ok(SkillDescriptor {
-        id,
-        name,
-        description,
-        path: Some(path.to_path_buf()),
-        body,
-        capabilities: normalize_string_list(metadata.capabilities),
-        mcp_dependencies: metadata.dependencies.tools,
-    })
-}
-
-fn load_skill_metadata(skill_path: &Path) -> Result<SkillMetadataFile> {
-    let Some(skill_dir) = skill_path.parent() else {
-        return Ok(SkillMetadataFile::default());
-    };
-    let json_path = skill_dir.join("agents/openai.json");
-    if json_path.is_file() {
-        let contents = std::fs::read_to_string(&json_path)
-            .with_context(|| format!("read {}", json_path.display()))?;
-        let parsed = serde_json::from_str::<SkillMetadataFile>(&contents)
-            .with_context(|| format!("parse {}", json_path.display()))?;
-        return Ok(parsed);
-    }
-    let yaml_path = skill_dir.join("agents/openai.yaml");
-    if yaml_path.is_file() {
-        let contents = std::fs::read_to_string(&yaml_path)
-            .with_context(|| format!("read {}", yaml_path.display()))?;
-        return Ok(parse_skill_metadata_yaml(&contents));
-    }
-    Ok(SkillMetadataFile::default())
-}
-
-fn extract_frontmatter(contents: &str) -> Option<(&str, &str)> {
-    let rest = contents.strip_prefix("---\n")?;
-    let closing = rest.find("\n---")?;
-    let frontmatter = &rest[..closing];
-    let body = rest[closing + "\n---".len()..]
-        .strip_prefix('\n')
-        .unwrap_or(&rest[closing + "\n---".len()..]);
-    Some((frontmatter, body))
-}
-
-fn parse_skill_frontmatter(frontmatter: &str) -> Result<SkillFrontmatter> {
-    let mut parsed = SkillFrontmatter {
-        id: None,
-        name: None,
-        description: None,
-    };
-    for line in frontmatter.lines() {
-        let Some((key, value)) = split_key_value(line) else {
-            continue;
-        };
-        match key {
-            "id" => parsed.id = Some(value),
-            "name" => parsed.name = Some(value),
-            "description" => parsed.description = Some(value),
-            _ => {}
-        }
-    }
-    Ok(parsed)
-}
-
-fn parse_skill_metadata_yaml(contents: &str) -> SkillMetadataFile {
-    let mut metadata = SkillMetadataFile::default();
-    let mut in_capabilities = false;
-    let mut in_tools = false;
-    let mut current_tool: Option<SkillToolDependency> = None;
-
-    for raw in contents.lines() {
-        let line = raw.trim();
-        if line.is_empty() || line.starts_with('#') {
-            continue;
-        }
-        if line == "capabilities:" {
-            in_capabilities = true;
-            in_tools = false;
-            continue;
-        }
-        if line == "dependencies:" {
-            in_capabilities = false;
-            continue;
-        }
-        if line == "tools:" {
-            in_tools = true;
-            in_capabilities = false;
-            continue;
-        }
-        if in_capabilities && line.starts_with("- ") {
-            metadata.capabilities.push(parse_scalar(&line[2..]));
-            continue;
-        }
-        if in_tools && line.starts_with("- ") {
-            if let Some(tool) = current_tool.take() {
-                metadata.dependencies.tools.push(tool);
-            }
-            let mut tool = SkillToolDependency {
-                kind: String::new(),
-                value: String::new(),
-                description: None,
-                transport: None,
-                command: None,
-                args: Vec::new(),
-                url: None,
-            };
-            if let Some((key, value)) = split_key_value(&line[2..]) {
-                assign_dependency_field(&mut tool, key, value);
-            }
-            current_tool = Some(tool);
-            continue;
-        }
-        if in_tools
-            && let Some(tool) = current_tool.as_mut()
-            && let Some((key, value)) = split_key_value(line)
-        {
-            assign_dependency_field(tool, key, value);
-        }
-    }
-    if let Some(tool) = current_tool.take() {
-        metadata.dependencies.tools.push(tool);
-    }
-    metadata
-        .dependencies
-        .tools
-        .retain(|tool| !tool.kind.trim().is_empty() && !tool.value.trim().is_empty());
-    metadata
-}
-
-fn split_key_value(line: &str) -> Option<(&str, String)> {
-    let line = line.trim();
-    let (key, value) = line.split_once(':')?;
-    Some((key.trim(), parse_scalar(value.trim())))
-}
-
-fn parse_scalar(value: &str) -> String {
-    value
-        .trim()
-        .trim_matches('"')
-        .trim_matches('\'')
-        .trim()
-        .to_string()
-}
-
-fn parse_array(value: &str) -> Vec<String> {
-    let value = value.trim();
-    if !value.starts_with('[') || !value.ends_with(']') {
-        return Vec::new();
-    }
-    value[1..value.len() - 1]
-        .split(',')
-        .map(parse_scalar)
-        .filter(|value| !value.is_empty())
-        .collect()
-}
-
-fn assign_dependency_field(tool: &mut SkillToolDependency, key: &str, value: String) {
-    match key {
-        "type" => tool.kind = value,
-        "value" => tool.value = value,
-        "description" => tool.description = Some(value),
-        "transport" => tool.transport = Some(value),
-        "command" => tool.command = Some(value),
-        "args" => tool.args = parse_array(&value),
-        "url" => tool.url = Some(value),
-        _ => {}
-    }
-}
-
-fn normalize_identifier(value: &str) -> String {
-    let mut out = String::new();
-    let mut previous_dash = false;
-    for ch in value.chars().flat_map(char::to_lowercase) {
-        if ch.is_ascii_alphanumeric() {
-            out.push(ch);
-            previous_dash = false;
-        } else if !previous_dash {
-            out.push('-');
-            previous_dash = true;
-        }
-    }
-    out.trim_matches('-').to_string()
-}
-
-fn normalize_string_list(values: Vec<String>) -> Vec<String> {
-    let mut seen = BTreeSet::new();
-    values
-        .into_iter()
-        .map(|value| value.trim().to_string())
-        .filter(|value| !value.is_empty())
-        .filter(|value| seen.insert(value.clone()))
-        .collect()
 }
 
 fn default_true() -> bool {
@@ -1203,7 +820,7 @@ mod tests {
         let skill_dir = root.join(".marvis/skills/rust");
         std::fs::create_dir_all(skill_dir.join("agents")).unwrap();
         std::fs::write(
-            skill_dir.join(SKILL_FILE_NAME),
+            skill_dir.join(crate::skills::SKILL_FILE_NAME),
             "---\nname: Rust Helper\ndescription: Helps Rust work.\n---\nUse cargo carefully.\n",
         )
         .unwrap();
@@ -1215,7 +832,7 @@ mod tests {
 
         let registry = SkillRegistry::load(&root);
         let skill = registry.skills.get("rust-helper").unwrap();
-        assert_eq!(skill.capabilities, vec!["read_file", "run_build"]);
+        assert_eq!(skill.local_tools, vec!["read_file", "run_build"]);
         assert_eq!(skill.mcp_dependencies[0].value, "docs");
         assert!(registry.mcp_servers.contains_key("docs"));
     }
@@ -1249,8 +866,34 @@ mod tests {
         assert!(resolve_mcp_cwd(&root, &server).is_err());
     }
 
+    #[tokio::test]
+    async fn required_disabled_mcp_server_fails_closed() {
+        let root =
+            std::env::temp_dir().join(format!("marvis-mcp-disabled-test-{}", std::process::id()));
+        std::fs::create_dir_all(&root).unwrap();
+        let server = McpServerConfig {
+            name: "docs".to_string(),
+            transport: McpTransport::Stdio,
+            command: "does-not-run".to_string(),
+            args: Vec::new(),
+            env: BTreeMap::new(),
+            cwd: None,
+            enabled: false,
+            required: true,
+            enabled_tools: Vec::new(),
+            disabled_tools: Vec::new(),
+            startup_timeout_secs: DEFAULT_MCP_STARTUP_TIMEOUT_SECS,
+            tool_timeout_secs: DEFAULT_MCP_TOOL_TIMEOUT_SECS,
+        };
+
+        let err = McpToolRuntime::discover(&root, vec![server])
+            .await
+            .unwrap_err();
+        assert!(err.to_string().contains("disabled"));
+    }
+
     #[test]
-    fn resolves_agent_tools_as_profile_capped_skill_capabilities() {
+    fn resolves_agent_tools_as_profile_capped_skill_local_tools() {
         let registry = SkillRegistry::load(Path::new("/definitely/not/a/workspace"));
         let agent = AgentProfile {
             id: "agent".to_string(),

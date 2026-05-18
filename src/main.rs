@@ -1,5 +1,6 @@
 mod autonomy;
 mod skill_mcp;
+mod skills;
 mod tools;
 mod vscode;
 mod web;
@@ -167,6 +168,7 @@ fn cli_tool_policy(cli: &Cli) -> Result<ToolPolicy> {
         allow_git_write: cli.allow_risky_shell,
         allow_network: cli.allow_risky_shell,
         command_timeout_secs: 120,
+        selected_skills: Vec::new(),
     })
 }
 

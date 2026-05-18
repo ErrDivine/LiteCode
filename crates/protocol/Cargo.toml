@@ -3,6 +3,7 @@ name = "protocol"
 version = "0.1.0"
 edition = "2024"
 description = "Neutral runtime protocol types for lite-code"
+license = "MIT"
 
 [dependencies]
 serde = { workspace = true }

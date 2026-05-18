@@ -2,6 +2,8 @@
 name = "status"
 version = "0.1.0"
 edition = "2024"
+description = "Codebase and VSCode status model for Marvis"
+license = "MIT"
 
 [dependencies]
 serde = { workspace = true }

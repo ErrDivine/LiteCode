@@ -230,7 +230,7 @@
 <li>Dynamic tool definitions filtered by runtime policy.</li>
 <li>Local tool execution with write, shell, git, and network-like policy checks.</li>
 <li>Rollback preimage snapshots for workspace write tools.</li>
-<li>Skill registry with built-in/workspace skills and stdio MCP tool discovery for routed VSCode agents.</li>
+<li>Skill package registry with bundled/workspace Codex-style skills and stdio MCP tool discovery for routed VSCode agents.</li>
 <li>JSONL history recording.</li>
 <li>Event trace recording in rollout JSONL.</li>
 <li>Thread resume and fork basics.</li>
@@ -293,7 +293,7 @@ Web HTTP/SSE    -&gt; session-kernel -&gt; scheduler -&gt; tools -&gt; rollout
 </ul>
 <p>The model endpoint is configured with <code>MARVIS_API_KEY</code> and <code>MARVIS_BASE_URL</code>. Missing <code>MARVIS_API_KEY</code> is a configuration error; the VSCode product does not fall back to a fake model.</p>
 <p>The VSCode autonomy path is also composed in the binary crate. The extension sends status ticks; <code>src/autonomy.rs</code> gates unchanged or non-actionable state, calls the OpenAI-compatible chat API for task segmentation, and routes tasks through <code>pave-router</code>. The result is a suggest-first decision, not automatic tool execution.</p>
-<p>Accepted suggestions are then capped to the routed profile approval. <code>src/skill_mcp.rs</code> resolves the selected profile's concrete skills and stdio MCP servers, injects selected skill bodies into the system prompt, and exposes only local tools/MCP tools allowed by the profile and skill capabilities. Stdio MCP startup requires shell approval because it launches a local process.</p>
+<p>Accepted suggestions are then capped to the routed profile approval. <code>src/skills.rs</code> loads real Codex-style skill packages, while <code>src/skill_mcp.rs</code> resolves the selected profile's skills and stdio MCP servers. Selected skill bodies are injected into the system prompt, and visible local tools/MCP tools are capped by the profile allowlist and the skill package's declared local tool dependencies. Stdio MCP startup requires shell approval because it launches a local process.</p>
 <h2 id="runtime-boundaries"><a class="header" href="#runtime-boundaries">Runtime Boundaries</a></h2>
 <h3 id="protocol-boundary"><a class="header" href="#protocol-boundary">Protocol Boundary</a></h3>
 <p>The protocol crate is the serialization boundary. Anything sent across process boundaries or written to rollout JSONL should be expressible as protocol types. This keeps UI shells and persistence from depending on internal scheduler structs.</p>
@@ -1454,7 +1454,7 @@ run_user_turn
 <li>Caps the request approval to the stored routed approval.</li>
 <li>Resolves the selected agent's skills and MCP servers.</li>
 <li>Adds selected skill instructions to the system prompt.</li>
-<li>Filters visible tools by runtime policy, skill capabilities, and the agent tool allowlist.</li>
+<li>Filters visible tools by runtime policy, selected skill package local-tool dependencies, and the agent tool allowlist.</li>
 <li>Exposes discovered stdio MCP tools only when MCP discovery succeeds.</li>
 <li>Runs the existing bounded VSCode prompt flow.</li>
 </ul>
@@ -1477,7 +1477,7 @@ run_user_turn
 <h2 id="public-types-and-functions"><a class="header" href="#public-types-and-functions">Public Types And Functions</a></h2>
 <div class="table-wrapper"><table><thead><tr><th>Item</th><th>Purpose</th></tr></thead><tbody>
 <tr><td><code>ToolResult</code></td><td>Internal result wrapper with <code>output: String</code>.</td></tr>
-<tr><td><code>ToolPolicy</code></td><td>Per-turn permissions for workspace writes, shell, risky shell, git writes, network-like commands, cwd, and timeout.</td></tr>
+<tr><td><code>ToolPolicy</code></td><td>Per-turn permissions for workspace writes, shell, risky shell, git writes, network-like commands, cwd, timeout, and selected skill packages.</td></tr>
 <tr><td><code>LocalToolExecutor</code></td><td>Implements <code>session_kernel::ToolExecutor</code> using a <code>ToolPolicy</code>, plus optional discovered MCP tools.</td></tr>
 <tr><td><code>tool_definitions_for_policy(policy)</code></td><td>Returns only the dynamic JSON schemas allowed by the current policy.</td></tr>
 <tr><td><code>execute_tool_with_policy(policy, name, input)</code></td><td>Dispatches tool execution by name and checks policy again at runtime.</td></tr>
@@ -1489,6 +1489,8 @@ run_user_turn
 <li><code>MAX_SEARCH_MATCHES = 100</code></li>
 <li><code>MAX_FIND_RESULTS = 200</code></li>
 <li><code>MAX_WALK_DEPTH = 20</code></li>
+<li><code>MAX_READ_MANY_FILES = 12</code></li>
+<li><code>MAX_SKILL_RESOURCE_BYTES = 256_000</code></li>
 <li><code>SKIP_DIRS</code>: <code>.git</code>, <code>node_modules</code>, <code>target</code>, cache/build directories, and similar non-source directories.</li>
 </ul>
 <h2 id="exposed-tools"><a class="header" href="#exposed-tools">Exposed Tools</a></h2>
@@ -1541,6 +1543,31 @@ run_user_turn
 <li>Rejects invalid UTF-8.</li>
 <li>Supports 1-based line offsets.</li>
 <li>Truncates output.</li>
+</ul>
+<h3 id="read_many_files"><a class="header" href="#read_many_files"><code>read_many_files</code></a></h3>
+<p>Reads several UTF-8 workspace files in one call.</p>
+<p>Parameters:</p>
+<ul>
+<li><code>paths: string[]</code>, maximum <code>12</code></li>
+<li>optional <code>limit_per_file: integer</code>, default <code>200</code></li>
+</ul>
+<p>Behavior:</p>
+<ul>
+<li>Uses the same workspace and UTF-8 protections as <code>read_file</code>.</li>
+<li>Returns each file under a path header with line numbers.</li>
+</ul>
+<h3 id="list_symbols"><a class="header" href="#list_symbols"><code>list_symbols</code></a></h3>
+<p>Returns a lightweight source outline.</p>
+<p>Parameters:</p>
+<ul>
+<li><code>path: string</code></li>
+<li>optional <code>limit: integer</code>, default <code>120</code></li>
+</ul>
+<p>Behavior:</p>
+<ul>
+<li>Restricts paths to the workspace.</li>
+<li>Recognizes common Rust, Python, JavaScript, TypeScript, and Markdown declarations.</li>
+<li>Intended for navigation, not language-server exactness.</li>
 </ul>
 <h3 id="edit_file"><a class="header" href="#edit_file"><code>edit_file</code></a></h3>
 <p>Replaces an exact string with new content.</p>
@@ -1659,6 +1686,15 @@ run_user_turn
 <li>Require shell permission.</li>
 <li>Use allowlisted git commands only.</li>
 </ul>
+<h3 id="skill-package-tools"><a class="header" href="#skill-package-tools">Skill package tools</a></h3>
+<p>Selected routed agents can inspect equipped Codex-style skill packages:</p>
+<ul>
+<li><code>list_skills</code>: lists equipped skills, package roots, tool dependencies, and resource counts.</li>
+<li><code>list_skill_resources</code>: lists scripts, references, and assets for one equipped skill.</li>
+<li><code>read_skill_resource</code>: reads a declared text resource from an equipped skill package.</li>
+<li><code>run_skill_script</code>: runs a declared script directly, without shell string interpolation, and only appears with risky-shell approval.</li>
+</ul>
+<p>Skill tools never expose unequipped skills. Resource paths must be declared package resources and stay under the skill package root.</p>
 <h2 id="helper-functions"><a class="header" href="#helper-functions">Helper Functions</a></h2>
 <ul>
 <li><code>truncate_output</code></li>
@@ -1677,21 +1713,28 @@ run_user_turn
 <li>Persist tool call records as response items in addition to trace events.</li>
 </ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="skill-and-mcp-runtime"><a class="header" href="#skill-and-mcp-runtime">Skill And MCP Runtime</a></h1>
-<p><code>src/skill_mcp.rs</code> is the runtime layer that turns a routed agent profile into concrete skills and MCP tools.</p>
+<p><code>src/skill_mcp.rs</code> resolves routed agent profiles, while <code>src/skills.rs</code> owns Codex-style skill package loading. Skills and tools are separate layers: skills are archived instruction packages, local tool functions and MCP tools are the execution layer.</p>
 <h2 id="skills"><a class="header" href="#skills">Skills</a></h2>
 <p>The registry loads:</p>
 <ul>
-<li>built-in skills: <code>rust-diagnostic-repair</code>, <code>test-failure-triage</code>, and <code>repo-explainer</code></li>
+<li>bundled system skill packages: <code>rust-diagnostic-repair</code>, <code>test-failure-triage</code>, and <code>repo-explainer</code></li>
 <li>workspace skills under <code>.marvis/skills/**/SKILL.md</code></li>
 <li>Codex-compatible workspace skills under <code>.agents/skills/**/SKILL.md</code></li>
 </ul>
-<p>Each <code>SKILL.md</code> must start with YAML-style frontmatter containing at least <code>name</code> and <code>description</code>. An optional <code>id</code> overrides the normalized skill id.</p>
+<p>Bundled system skills are real packages with <code>SKILL.md</code>, <code>agents/openai.yaml</code>, <code>references/</code>, and <code>scripts/</code>. At runtime Marvis materializes them under <code>.lite-code/skills/.system</code> and loads them through the same package loader used for workspace skills.</p>
+<p>Each <code>SKILL.md</code> must start with YAML-style frontmatter containing at least <code>name</code> and <code>description</code>. An optional <code>id</code> overrides the normalized skill id. Skill packages can include:</p>
+<ul>
+<li><code>references/</code>: read-only Markdown or text references</li>
+<li><code>scripts/</code>: script utilities that can run only when risky-shell approval is present</li>
+<li><code>assets/</code>: package assets such as icons or templates</li>
+</ul>
 <p>Optional metadata can live at <code>agents/openai.json</code> or <code>agents/openai.yaml</code> next to the skill file. Marvis reads:</p>
 <ul>
-<li><code>capabilities</code>: local tool names the skill can use</li>
-<li><code>dependencies.tools</code>: MCP dependencies with <code>type: mcp</code>, <code>value</code>, <code>transport: stdio</code>, <code>command</code>, and optional <code>args</code></li>
+<li><code>dependencies.tools</code> entries with <code>type: local</code>, <code>tool</code>, <code>local_tool</code>, or <code>function</code> as local tool dependencies</li>
+<li><code>dependencies.tools</code> entries with <code>type: mcp</code>, <code>value</code>, <code>transport: stdio</code>, <code>command</code>, and optional <code>args</code></li>
+<li>legacy <code>capabilities</code> as local tool dependencies</li>
 </ul>
-<p>Agent profiles name skills through <code>skills: ["skill-id"]</code>. The active local tool list is capped by both the agent profile allowlist and the selected skill capabilities.</p>
+<p>Agent profiles name skills through <code>skills: ["skill-id"]</code>. The active local tool list is capped by both the agent profile allowlist and the selected skill's local tool dependencies. Selected skill bodies are injected into the system prompt, and equipped agents can use <code>list_skills</code>, <code>list_skill_resources</code>, and <code>read_skill_resource</code> to inspect package resources.</p>
 <h2 id="mcp"><a class="header" href="#mcp">MCP</a></h2>
 <p>The MCP runtime reads stdio server config from <code>.marvis/mcp.json</code> and <code>.mcp.json</code>.</p>
 <pre><code class="language-json">{
@@ -1707,7 +1750,7 @@ run_user_turn
 }
 </code></pre>
 <p>Before an agent turn starts, Marvis initializes each selected MCP server, sends <code>tools/list</code>, and exposes only discovered tools. Because stdio MCP startup launches a local process, selected MCP servers require shell approval for that accepted turn. Tool names are qualified as <code>mcp__server__tool</code> and capped to the Responses API name length. Tool calls go back through the same stdio JSON-RPC path with <code>tools/call</code>.</p>
-<p>Missing or failing MCP servers fail closed for selected agents. Marvis does not synthesize MCP tools.</p>
+<p>Missing, disabled, failing, or tool-less required MCP servers fail closed for selected agents. Marvis does not synthesize MCP tools.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="vscode-extension"><a class="header" href="#vscode-extension">VSCode Extension</a></h1>
 <p><code>apps/vscode-extension</code> is the primary product shell for Marvis. It collects IDE state, starts the Rust runtime, renders status and trace information, and exposes user commands.</p>
 <h2 id="files"><a class="header" href="#files">Files</a></h2>
@@ -1905,6 +1948,9 @@ run_user_turn
 <p>Workspace skills are loaded from:</p>
 <pre><code class="language-text">.marvis/skills/**/SKILL.md
 .agents/skills/**/SKILL.md
+</code></pre>
+<p>Bundled system skills are materialized under:</p>
+<pre><code class="language-text">.lite-code/skills/.system/**/SKILL.md
 </code></pre>
 <p>Stdio MCP servers are loaded from:</p>
 <pre><code class="language-text">.marvis/mcp.json

@@ -3,6 +3,7 @@ name = "state-store"
 version = "0.1.0"
 edition = "2024"
 description = "Local state metadata runtime for lite-code"
+license = "MIT"
 
 [dependencies]
 protocol = { path = "../protocol" }

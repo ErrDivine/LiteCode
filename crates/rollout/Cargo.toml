@@ -3,6 +3,7 @@ name = "rollout"
 version = "0.1.0"
 edition = "2024"
 description = "JSONL rollout persistence for lite-code sessions"
+license = "MIT"
 
 [dependencies]
 anyhow = "1"

@@ -1498,7 +1498,7 @@ Current Marvis reads JSON config from `.marvis/mcp.json` or `.mcp.json`:
 
 The skill registry should unify built-in skills, local repo skills, and MCP-backed skills.
 
-Current Marvis supports Codex-style skill bodies under `.marvis/skills/**/SKILL.md` and `.agents/skills/**/SKILL.md`:
+Current Marvis supports Codex-style skill packages. Bundled system skills are archived packages with `SKILL.md`, `agents/openai.yaml`, `references/`, and `scripts/`; they are materialized under `.lite-code/skills/.system` and loaded through the same package loader as workspace skills. Workspace skill packages are loaded from `.marvis/skills/**/SKILL.md` and `.agents/skills/**/SKILL.md`:
 
 ```markdown
 ---
@@ -1509,13 +1509,16 @@ description: Repair Rust diagnostics with focused verified patches.
 Use compiler diagnostics, read nearby code first, apply the smallest patch, and verify with `run_build` or `run_test`.
 ```
 
-Optional tool capability and MCP dependency metadata lives beside the skill at `agents/openai.json` or `agents/openai.yaml`:
+Optional local tool and MCP dependency metadata lives beside the skill at `agents/openai.json` or `agents/openai.yaml`:
 
 ```json
 {
-  "capabilities": ["read_file", "search_files", "apply_patch", "run_build"],
   "dependencies": {
     "tools": [
+      {
+        "type": "local",
+        "value": "read_file"
+      },
       {
         "type": "mcp",
         "value": "local-docs",
@@ -1527,6 +1530,8 @@ Optional tool capability and MCP dependency metadata lives beside the skill at `
   }
 }
 ```
+
+The selected agent receives the skill body as prompt context, while local tool functions and MCP tools remain separately gated by the routed profile. Equipped agents can inspect package resources with `list_skills`, `list_skill_resources`, and `read_skill_resource`; `run_skill_script` is available only under risky-shell approval.
 
 ---
 
@@ -2357,8 +2362,8 @@ Create the segment registry and invalidation rules.
 
 - `crates/pave-router` implements Rust JSON PAVE vectors, cosine scoring, task candidates, agent profiles, and route decisions.
 - VSCode settings provide `marvis.agentProfiles`; Rust uses built-in Rust diagnostic, test triage, and repo explainer profiles only as validated default profiles when no valid custom profiles are configured.
-- Agent profiles can name concrete `skills` and `mcp_servers`; `src/skill_mcp.rs` loads built-in skills plus workspace skills from `.marvis/skills` and `.agents/skills`.
-- Stdio MCP servers are loaded from `.marvis/mcp.json` or `.mcp.json`, initialized with JSON-RPC, discovered through `tools/list`, and exposed only when discovery succeeds.
+- Agent profiles can name concrete `skills` and `mcp_servers`; `src/skills.rs` loads bundled/workspace Codex-style skill packages, and `src/skill_mcp.rs` resolves those packages with selected stdio MCP servers.
+- Stdio MCP servers are loaded from `.marvis/mcp.json` or `.mcp.json`, initialized with JSON-RPC, discovered through `tools/list`, and exposed only when discovery succeeds. Selected required MCP servers fail closed when missing, disabled, failing, or tool-less.
 - Stdio MCP startup requires shell approval because it launches a local process.
 - Accepted autonomous suggestions execute with capped permissions from the routed profile; stdio clients cannot broaden a suggestion into risky shell/git/network access.
 - Route decisions include scores and reasons. MCP entries are not faked; only available local and discovered MCP tools are exposed after policy, skill capability, and allowlist filtering.

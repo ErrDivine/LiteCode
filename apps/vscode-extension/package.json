@@ -4,6 +4,7 @@
   "description": "VSCode shell for the Marvis coding-agent runtime in lite-code.",
   "version": "0.1.0",
   "publisher": "errdivine",
+  "license": "MIT",
   "engines": {
     "vscode": "^1.90.0"
   },
@@ -134,14 +135,20 @@
               "skill_prompt": "You are a Rust repair agent. Focus on compiler diagnostics, failing tests, and small verified patches.",
               "tool_allowlist": [
                 "read_file",
+                "read_many_files",
                 "search_files",
                 "find_files",
                 "list_directory",
+                "list_symbols",
                 "apply_patch",
                 "run_test",
                 "run_build",
+                "run_formatter",
                 "git_diff",
-                "git_status"
+                "git_status",
+                "list_skills",
+                "list_skill_resources",
+                "read_skill_resource"
               ],
               "pave": {
                 "rust": 1,
@@ -168,12 +175,17 @@
               "skill_prompt": "You are a test failure triage agent. Explain the failing behavior, inspect focused code, and suggest the smallest verification path.",
               "tool_allowlist": [
                 "read_file",
+                "read_many_files",
                 "search_files",
                 "find_files",
                 "list_directory",
+                "list_symbols",
                 "run_test",
                 "git_diff",
-                "git_status"
+                "git_status",
+                "list_skills",
+                "list_skill_resources",
+                "read_skill_resource"
               ],
               "pave": {
                 "tests": 1,
@@ -200,11 +212,16 @@
               "skill_prompt": "You are a repo explanation agent. Read only, summarize relationships, and avoid proposing edits unless the user asks.",
               "tool_allowlist": [
                 "read_file",
+                "read_many_files",
                 "search_files",
                 "find_files",
                 "list_directory",
+                "list_symbols",
                 "git_diff",
-                "git_status"
+                "git_status",
+                "list_skills",
+                "list_skill_resources",
+                "read_skill_resource"
               ],
               "pave": {
                 "explanation": 1,

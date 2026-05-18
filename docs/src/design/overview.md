@@ -50,7 +50,7 @@ The runtime already supports:
 - Dynamic tool definitions filtered by runtime policy.
 - Local tool execution with write, shell, git, and network-like policy checks.
 - Rollback preimage snapshots for workspace write tools.
-- Skill registry with built-in/workspace skills and stdio MCP tool discovery for routed VSCode agents.
+- Skill package registry with bundled/workspace Codex-style skills and stdio MCP tool discovery for routed VSCode agents.
 - JSONL history recording.
 - Event trace recording in rollout JSONL.
 - Thread resume and fork basics.

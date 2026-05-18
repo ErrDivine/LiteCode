@@ -3,6 +3,7 @@ name = "session-kernel"
 version = "0.1.0"
 edition = "2024"
 description = "Live session runtime kernel for lite-code"
+license = "MIT"
 
 [dependencies]
 anyhow = "1"

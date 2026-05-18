@@ -7,7 +7,7 @@
 | Item | Purpose |
 | --- | --- |
 | `ToolResult` | Internal result wrapper with `output: String`. |
-| `ToolPolicy` | Per-turn permissions for workspace writes, shell, risky shell, git writes, network-like commands, cwd, and timeout. |
+| `ToolPolicy` | Per-turn permissions for workspace writes, shell, risky shell, git writes, network-like commands, cwd, timeout, and selected skill packages. |
 | `LocalToolExecutor` | Implements `session_kernel::ToolExecutor` using a `ToolPolicy`, plus optional discovered MCP tools. |
 | `tool_definitions_for_policy(policy)` | Returns only the dynamic JSON schemas allowed by the current policy. |
 | `execute_tool_with_policy(policy, name, input)` | Dispatches tool execution by name and checks policy again at runtime. |
@@ -18,6 +18,8 @@
 - `MAX_SEARCH_MATCHES = 100`
 - `MAX_FIND_RESULTS = 200`
 - `MAX_WALK_DEPTH = 20`
+- `MAX_READ_MANY_FILES = 12`
+- `MAX_SKILL_RESOURCE_BYTES = 256_000`
 - `SKIP_DIRS`: `.git`, `node_modules`, `target`, cache/build directories, and similar non-source directories.
 
 ## Exposed Tools
@@ -78,6 +80,35 @@ Behavior:
 - Rejects invalid UTF-8.
 - Supports 1-based line offsets.
 - Truncates output.
+
+### `read_many_files`
+
+Reads several UTF-8 workspace files in one call.
+
+Parameters:
+
+- `paths: string[]`, maximum `12`
+- optional `limit_per_file: integer`, default `200`
+
+Behavior:
+
+- Uses the same workspace and UTF-8 protections as `read_file`.
+- Returns each file under a path header with line numbers.
+
+### `list_symbols`
+
+Returns a lightweight source outline.
+
+Parameters:
+
+- `path: string`
+- optional `limit: integer`, default `120`
+
+Behavior:
+
+- Restricts paths to the workspace.
+- Recognizes common Rust, Python, JavaScript, TypeScript, and Markdown declarations.
+- Intended for navigation, not language-server exactness.
 
 ### `edit_file`
 
@@ -216,6 +247,17 @@ Behavior:
 
 - Require shell permission.
 - Use allowlisted git commands only.
+
+### Skill package tools
+
+Selected routed agents can inspect equipped Codex-style skill packages:
+
+- `list_skills`: lists equipped skills, package roots, tool dependencies, and resource counts.
+- `list_skill_resources`: lists scripts, references, and assets for one equipped skill.
+- `read_skill_resource`: reads a declared text resource from an equipped skill package.
+- `run_skill_script`: runs a declared script directly, without shell string interpolation, and only appears with risky-shell approval.
+
+Skill tools never expose unequipped skills. Resource paths must be declared package resources and stay under the skill package root.
 
 ## Helper Functions
 

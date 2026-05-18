@@ -1,0 +1,39 @@
+dependencies:
+  tools:
+    - type: local
+      value: read_file
+    - type: local
+      value: read_many_files
+    - type: local
+      value: search_files
+    - type: local
+      value: find_files
+    - type: local
+      value: list_directory
+    - type: local
+      value: list_symbols
+    - type: local
+      value: apply_patch
+    - type: local
+      value: edit_file
+    - type: local
+      value: run_test
+    - type: local
+      value: run_build
+    - type: local
+      value: run_formatter
+    - type: local
+      value: git_diff
+    - type: local
+      value: git_status
+    - type: local
+      value: list_skills
+    - type: local
+      value: list_skill_resources
+    - type: local
+      value: read_skill_resource
+interface:
+  display_name: Rust Diagnostic Repair
+  short_description: Repair Rust diagnostics with small verified patches.
+policy:
+  allow_implicit_invocation: true

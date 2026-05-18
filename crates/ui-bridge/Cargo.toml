@@ -2,7 +2,8 @@
 name = "ui-bridge"
 version = "0.1.0"
 edition = "2024"
-description = "CLI and web event adaptation for lite-code"
+description = "CLI, web, and VSCode event adaptation for lite-code"
+license = "MIT"
 
 [dependencies]
 protocol = { path = "../protocol" }

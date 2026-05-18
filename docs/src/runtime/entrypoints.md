@@ -164,7 +164,7 @@ Fields:
 - Caps the request approval to the stored routed approval.
 - Resolves the selected agent's skills and MCP servers.
 - Adds selected skill instructions to the system prompt.
-- Filters visible tools by runtime policy, skill capabilities, and the agent tool allowlist.
+- Filters visible tools by runtime policy, selected skill package local-tool dependencies, and the agent tool allowlist.
 - Exposes discovered stdio MCP tools only when MCP discovery succeeds.
 - Runs the existing bounded VSCode prompt flow.
 

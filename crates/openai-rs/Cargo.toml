@@ -3,6 +3,7 @@ name = "openai-rs"
 version = "0.1.0"
 edition = "2024"
 description = "Reusable Rust crate for OpenAI-compatible LLM API connections"
+license = "MIT"
 
 [lib]
 name = "openai_rs"

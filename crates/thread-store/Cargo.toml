@@ -3,6 +3,7 @@ name = "thread-store"
 version = "0.1.0"
 edition = "2024"
 description = "Storage-neutral thread persistence boundary for lite-code"
+license = "MIT"
 
 [dependencies]
 anyhow = "1"

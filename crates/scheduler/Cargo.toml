@@ -3,6 +3,7 @@ name = "scheduler"
 version = "0.1.0"
 edition = "2024"
 description = "Model scheduling and turn orchestration for lite-code"
+license = "MIT"
 
 [dependencies]
 async-trait = { workspace = true }

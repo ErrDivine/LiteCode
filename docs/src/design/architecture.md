@@ -58,7 +58,7 @@ The model endpoint is configured with `MARVIS_API_KEY` and `MARVIS_BASE_URL`. Mi
 
 The VSCode autonomy path is also composed in the binary crate. The extension sends status ticks; `src/autonomy.rs` gates unchanged or non-actionable state, calls the OpenAI-compatible chat API for task segmentation, and routes tasks through `pave-router`. The result is a suggest-first decision, not automatic tool execution.
 
-Accepted suggestions are then capped to the routed profile approval. `src/skill_mcp.rs` resolves the selected profile's concrete skills and stdio MCP servers, injects selected skill bodies into the system prompt, and exposes only local tools/MCP tools allowed by the profile and skill capabilities. Stdio MCP startup requires shell approval because it launches a local process.
+Accepted suggestions are then capped to the routed profile approval. `src/skills.rs` loads real Codex-style skill packages, while `src/skill_mcp.rs` resolves the selected profile's skills and stdio MCP servers. Selected skill bodies are injected into the system prompt, and visible local tools/MCP tools are capped by the profile allowlist and the skill package's declared local tool dependencies. Stdio MCP startup requires shell approval because it launches a local process.
 
 ## Runtime Boundaries
 

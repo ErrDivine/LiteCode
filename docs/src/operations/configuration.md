@@ -45,6 +45,12 @@ Workspace skills are loaded from:
 .agents/skills/**/SKILL.md
 ```
 
+Bundled system skills are materialized under:
+
+```text
+.lite-code/skills/.system/**/SKILL.md
+```
+
 Stdio MCP servers are loaded from:
 
 ```text
