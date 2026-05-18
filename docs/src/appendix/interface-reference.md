@@ -141,7 +141,7 @@ This page is a compact lookup for public interfaces across the workspace.
 | `ThreadStoreError` | enum | Thread store errors. |
 | `ThreadStore` | trait | Thread storage API. |
 | `LocalThreadStore` | struct | Local rollout-backed store. |
-| `RemoteThreadStore` | struct | Remote stub. |
+| `UnavailableThreadStore` | struct | Explicit erroring store for unconfigured backends. |
 | `ThreadRecorder` | struct | Append helper. |
 | `StateRuntime` | struct | Metadata/log runtime. |
 | `ThreadMetadata` | struct | Thread metadata row. |

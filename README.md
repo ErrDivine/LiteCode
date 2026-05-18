@@ -6,10 +6,13 @@ A Rust coding-agent runtime with a VSCode product shell. The original CLI and we
 
 - **VSCode status ingestion**: Collects active editor, cursor, selections, visible ranges, Problems diagnostics, task/debug state, and recorded command results.
 - **Structured status**: Builds `CodebaseStatus`, git state, deterministic segments, stuckness hints, and context capsules.
+- **Autonomous suggestions**: VSCode wake-up timers send status ticks; Rust segments actionable problems with an LLM and suggests useful agent actions.
+- **PAVE routing**: Task vectors are matched against configured agent-profile vectors with cosine scoring.
+- **Skill/MCP routing**: Routed agents resolve concrete built-in or workspace skills and can expose discovered stdio MCP tools without fake fallbacks.
 - **Agent runtime**: Uses `session-kernel` and `scheduler` for streamed model/tool turns.
-- **Tool usage**: The model can execute shell commands and read/write/edit files through local tools.
+- **Tool usage**: The model can execute shell commands and read/write/edit files through policy-gated local tools with rollback snapshots before writes.
 - **Streaming responses**: CLI, web, and VSCode bridge all receive runtime events.
-- **Configurable model**: Choose any model available on OpenRouter (defaults to `nvidia/nemotron-3-super-120b-a12b:free`).
+- **Configurable model provider**: Use any OpenAI-compatible chat completions endpoint through `MARVIS_API_KEY` and `MARVIS_BASE_URL`.
 - **Built with Rust**: Fast, safe, and efficient.
 
 ## Installation
@@ -17,7 +20,7 @@ A Rust coding-agent runtime with a VSCode product shell. The original CLI and we
 ### Prerequisites
 
 - Rust toolchain (version 1.70 or later)
-- An OpenRouter API key (set it via `OPENROUTER_API_KEY`; see [Configuration](#configuration))
+- An API key for an OpenAI-compatible provider (set it via `MARVIS_API_KEY`; see [Configuration](#configuration))
 
 ### Build from Source
 
@@ -36,20 +39,22 @@ cargo build --release
 ```
 
 ## Usage
-Get an OpenRouter API key from [OpenRouter](https://openrouter.ai/) and set `OPENROUTER_API_KEY` before running LiteCode.
+Set `MARVIS_API_KEY` before running LiteCode. Set `MARVIS_BASE_URL` if your provider does not use `https://api.openai.com/v1`.
 
 ### Option 1: Set for current terminal session
 
 Windows (PowerShell):
 
 ```powershell
-$env:OPENROUTER_API_KEY = "your_api_key_here"
+$env:MARVIS_API_KEY = "your_api_key_here"
+$env:MARVIS_BASE_URL = "https://api.openai.com/v1"
 ```
 
 macOS (zsh/bash):
 
 ```bash
-export OPENROUTER_API_KEY="your_api_key_here"
+export MARVIS_API_KEY="your_api_key_here"
+export MARVIS_BASE_URL="https://api.openai.com/v1"
 ```
 
 ### Option 2: Set permanently
@@ -57,7 +62,8 @@ export OPENROUTER_API_KEY="your_api_key_here"
 Windows (PowerShell):
 
 ```powershell
-[System.Environment]::SetEnvironmentVariable("OPENROUTER_API_KEY", "your_api_key_here", "User")
+[System.Environment]::SetEnvironmentVariable("MARVIS_API_KEY", "your_api_key_here", "User")
+[System.Environment]::SetEnvironmentVariable("MARVIS_BASE_URL", "https://api.openai.com/v1", "User")
 ```
 
 After setting it, open a new terminal.
@@ -65,7 +71,8 @@ After setting it, open a new terminal.
 macOS (zsh):
 
 ```bash
-echo 'export OPENROUTER_API_KEY="your_api_key_here"' >> ~/.zshrc
+echo 'export MARVIS_API_KEY="your_api_key_here"' >> ~/.zshrc
+echo 'export MARVIS_BASE_URL="https://api.openai.com/v1"' >> ~/.zshrc
 source ~/.zshrc
 ```
 
@@ -79,8 +86,12 @@ Run the CLI harness:
 
 - `--vscode-stdio`: Run the JSON stdio bridge used by the VSCode extension
 - `--web`: Launch the temporary web harness
-- `--model`, `-m`: Specify the model to use (default: `nvidia/nemotron-3-super-120b-a12b:free`)
+- `--model`, `-m`: Specify the model to use (default: `gpt-4.1-mini`)
+- `--base-url`: Override `MARVIS_BASE_URL` for this run
 - `--max-tokens`: Maximum tokens for each API response (default: `4096`)
+- `--allow-workspace-write`: Allow model-requested file writes in CLI/web harnesses
+- `--allow-risky-shell`: Allow broader shell/git/network-like commands in CLI/web harnesses
+- `--print-trace <path>`: Print a replayable trace summary from a rollout JSONL file
 
 ## VSCode Extension
 
@@ -98,16 +109,13 @@ The extension starts:
 target/debug/lite-code --vscode-stdio
 ```
 
-If that binary is missing, it falls back to:
-
-```bash
-cargo run --quiet -- --vscode-stdio
-```
+Published extension packages should include a runtime binary under `bin/`, or users can set `marvis.runtimePath`. The extension does not use `cargo run` as a product fallback.
 
 Useful commands:
 
 - `Marvis: Start Marvis`
 - `Marvis: Show Status`
+- `Marvis: Check Autonomy Now`
 - `Marvis: Ask Marvis`
 - `Marvis: Fix Near Cursor`
 - `Marvis: Record Terminal Failure`
@@ -128,13 +136,23 @@ The model will:
 
 ## Configuration
 
-lite-code reads the API key from the `OPENROUTER_API_KEY` environment variable at runtime.
+lite-code reads the API key from `MARVIS_API_KEY` at runtime.
 
-If this variable is not set, the CLI exits with a clear error message.
+`MARVIS_BASE_URL` defaults to:
+
+```text
+https://api.openai.com/v1
+```
+
+If `MARVIS_API_KEY` is not set, the CLI, web harness, and VSCode runtime return a clear configuration error. The VSCode product no longer falls back to a fake model.
 
 ## How It Works
 
 VSCode sends live editor status to the Rust stdio bridge. The Rust runtime turns that into segments such as user focus, diagnostics, recent diff, command failure, and risk. When the user asks Marvis for help, the runtime builds a context capsule from the active editor, cursor bubble, diagnostics, git state, and recent commands, then runs a normal `session-kernel` thread.
+
+When autonomy is enabled, the extension also sends debounced status ticks after meaningful VSCode activity and a low-frequency heartbeat while the runtime is active. Rust checks whether the status is actionable, asks the configured model to segment concrete tasks, routes each task through PAVE cosine scoring against configured agent profiles, and returns either `idle`, `suppressed`, or a suggestion. Suggestions do not run until the user accepts them.
+
+Accepted suggestions execute with the routed agent's capped permissions. Agent profiles can name real skills and MCP servers; workspace skills live under `.marvis/skills/<skill>/SKILL.md` or `.agents/skills/<skill>/SKILL.md`, and stdio MCP servers are read from `.marvis/mcp.json` or `.mcp.json`. Write tools create restoreable preimage snapshots under `.marvis/rollback`.
 
 ## Project Structure
 
@@ -147,8 +165,11 @@ crates/
 ├── session-kernel/   # thread/session runtime
 ├── scheduler/        # model turn execution
 ├── status/           # VSCode/codebase status, segments, stuckness, capsules
+├── pave-router/      # PAVE vectors, agent profiles, and route scoring
 └── ui-bridge/        # CLI/web/VSCode event adapters
 src/
+├── autonomy.rs       # autonomous wake-up, LLM segmentation, PAVE routing
+├── skill_mcp.rs      # skill registry and stdio MCP tool runtime
 ├── main.rs           # CLI/web/vscode-stdio entry point
 ├── tools.rs          # current local tool executor
 ├── vscode.rs         # VSCode stdio bridge
@@ -174,5 +195,5 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Acknowledgments
 
-- [OpenRouter](https://openrouter.ai/) for providing access to various language models
+- OpenAI-compatible API providers for model access
 - The Rust community for excellent libraries like `clap`, `tokio`, `reqwest`, and `serde`

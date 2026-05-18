@@ -8,7 +8,7 @@ pub enum TransportError {
     Http {
         status: StatusCode,
         url: Option<String>,
-        headers: Option<HeaderMap>,
+        headers: Option<Box<HeaderMap>>,
         body: Option<String>,
     },
     #[error("retry limit reached")]
@@ -32,7 +32,7 @@ pub enum StreamError {
 #[derive(Debug, Error)]
 pub enum ApiError {
     #[error(transparent)]
-    Transport(#[from] TransportError),
+    Transport(Box<TransportError>),
     #[error("api error {status}: {message}")]
     Api { status: StatusCode, message: String },
     #[error("stream error: {0}")]
@@ -45,4 +45,10 @@ pub enum ApiError {
     ContextWindowExceeded,
     #[error("server overloaded")]
     ServerOverloaded,
+}
+
+impl From<TransportError> for ApiError {
+    fn from(value: TransportError) -> Self {
+        Self::Transport(Box::new(value))
+    }
 }

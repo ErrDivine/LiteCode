@@ -7,9 +7,11 @@ This index lists every source module and its design responsibility.
 | File | Responsibility |
 | --- | --- |
 | `src/main.rs` | Binary entrypoint, CLI parsing, mode selection, runtime composition, CLI loop, shared system prompt. |
+| `src/autonomy.rs` | Autonomous wake-up coordinator, LLM problem segmentation, suggestion cooldowns, PAVE routing, accepted suggestion prompt building. |
+| `src/skill_mcp.rs` | Skill registry, selected skill rendering, stdio MCP discovery, tool qualification, and MCP tool calls. |
 | `src/web.rs` | Axum web harness, static HTML serving, chat endpoint, SSE event stream, web thread setup. |
 | `src/vscode.rs` | VSCode stdio server, request dispatch, status store integration, context capsule submission, streamed VSCode events. |
-| `src/tools.rs` | Dynamic local tool definitions and executor implementation. |
+| `src/tools.rs` | Dynamic local/MCP tool definitions, executor implementation, policy checks, and rollback snapshots. |
 | `static/index.html` | Temporary web harness frontend bundled into `src/web.rs`. |
 
 ## VSCode Application
@@ -37,7 +39,7 @@ This index lists every source module and its design responsibility.
 
 | File | Responsibility |
 | --- | --- |
-| `crates/scheduler/src/lib.rs` | OpenAI-compatible scheduler, synthetic scheduler, dynamic tool conversion, response history conversion. |
+| `crates/scheduler/src/lib.rs` | OpenAI-compatible scheduler config, model turn loop, tool budget enforcement, synthetic test scheduler, dynamic tool conversion, response history conversion. |
 
 ## `crates/openai-rs`
 
@@ -65,12 +67,18 @@ This index lists every source module and its design responsibility.
 | --- | --- |
 | `crates/status/src/lib.rs` | Workspace status model, VSCode status model, git parsing, segmentation, stuckness detection, context capsules. |
 
+## `crates/pave-router`
+
+| File | Responsibility |
+| --- | --- |
+| `crates/pave-router/src/lib.rs` | Sparse PAVE vectors, tool access flags, agent profiles, task candidates, route scoring, default profiles. |
+
 ## Persistence
 
 | File | Responsibility |
 | --- | --- |
-| `crates/rollout/src/lib.rs` | JSONL session metadata and response history recording, reading, listing, archive path support. |
-| `crates/thread-store/src/lib.rs` | Thread persistence trait, local rollout-backed store, remote stub, append helper. |
+| `crates/rollout/src/lib.rs` | JSONL session metadata, response history, event trace recording, reading, listing, archive path support. |
+| `crates/thread-store/src/lib.rs` | Thread persistence trait, local rollout-backed store, metadata sidecars, explicit unavailable-store adapter, append helper. |
 | `crates/state-store/src/lib.rs` | Local metadata/log appenders and migration marker. |
 
 ## `crates/ui-bridge`

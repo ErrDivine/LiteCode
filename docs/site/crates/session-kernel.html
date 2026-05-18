@@ -172,6 +172,7 @@
 <li><code>cwd</code></li>
 <li><code>system_prompt</code></li>
 <li><code>max_tokens</code></li>
+<li><code>max_tool_calls</code></li>
 <li><code>approval_policy</code></li>
 <li><code>sandbox_policy</code></li>
 <li><code>dynamic_tools</code></li>
@@ -179,7 +180,7 @@
 <li><code>history_root</code></li>
 <li><code>session_source</code></li>
 </ul>
-<p><code>SessionConfig::new(model, cwd)</code> defaults provider to <code>openrouter</code>, max tokens to <code>4096</code>, approval to <code>on_request</code>, sandbox to <code>workspace_write</code>, history persistence to true, and source to CLI.</p>
+<p><code>SessionConfig::new(model, cwd)</code> defaults provider to <code>openai-compatible</code>, max tokens to <code>4096</code>, max tool calls to <code>32</code>, approval to <code>on_request</code>, sandbox to <code>workspace_write</code>, history persistence to true, and source to CLI.</p>
 <h3 id="threadconfigsnapshot"><a class="header" href="#threadconfigsnapshot"><code>ThreadConfigSnapshot</code></a></h3>
 <p>Read-only configuration view returned by <code>ThreadHandle::config_snapshot</code>. It includes model, provider, approval, sandbox, cwd, ephemeral flag, and session source.</p>
 <h3 id="forksnapshot"><a class="header" href="#forksnapshot"><code>ForkSnapshot</code></a></h3>
@@ -277,7 +278,7 @@
 <tr><td><code>next_event()</code></td><td>Receives the next runtime event.</td></tr>
 <tr><td><code>steer_input(input, expected_turn_id, metadata)</code></td><td>Queues input during an active turn or starts a new turn while idle.</td></tr>
 <tr><td><code>inject_response_items(items)</code></td><td>Adds non-empty response items to history and persistence.</td></tr>
-<tr><td><code>flush_rollout()</code></td><td>Currently a no-op placeholder.</td></tr>
+<tr><td><code>flush_rollout()</code></td><td>Calls <code>sync_all</code> on the rollout file when persistence is enabled.</td></tr>
 <tr><td><code>config_snapshot()</code></td><td>Returns a thread configuration snapshot.</td></tr>
 <tr><td><code>token_usage_info()</code></td><td>Currently returns <code>None</code>.</td></tr>
 <tr><td><code>rollout_path()</code></td><td>Returns the rollout path if persistence is enabled.</td></tr>
@@ -287,7 +288,8 @@
 <ul>
 <li><code>submission_loop</code> serially processes submitted operations.</li>
 <li><code>run_user_turn</code> emits <code>TurnStarted</code>, <code>UserMessage</code>, scheduler events, <code>AgentMessage</code>, and <code>TurnComplete</code>.</li>
-<li>User and assistant response items are persisted through the history store.</li>
+<li>User response items are persisted before scheduling. Scheduler requests receive the prior history plus the current input, so the active user turn is not duplicated in the model request.</li>
+<li>Assistant, tool-call, and tool-output response items are persisted through the history store.</li>
 <li>Pending input is submitted as a new turn after the active turn completes.</li>
 </ul>
 <h2 id="design-notes"><a class="header" href="#design-notes">Design Notes</a></h2>

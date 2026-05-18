@@ -6,6 +6,7 @@ description = "CLI and web event adaptation for lite-code"
 
 [dependencies]
 protocol = { path = "../protocol" }
+pave-router = { path = "../pave-router" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 status = { path = "../status" }

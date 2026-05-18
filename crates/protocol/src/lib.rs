@@ -84,31 +84,21 @@ impl Op {
     }
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum AskForApproval {
     Never,
+    #[default]
     OnRequest,
 }
 
-impl Default for AskForApproval {
-    fn default() -> Self {
-        Self::OnRequest
-    }
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum SandboxPolicy {
+    #[default]
     WorkspaceWrite,
     ReadOnly,
     DangerFullAccess,
-}
-
-impl Default for SandboxPolicy {
-    fn default() -> Self {
-        Self::WorkspaceWrite
-    }
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]

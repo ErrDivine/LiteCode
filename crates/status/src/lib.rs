@@ -148,20 +148,15 @@ pub struct CursorContext {
     pub surrounding_text: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum DiagnosticSeverity {
     Error,
     Warning,
     Information,
     Hint,
+    #[default]
     Unknown,
-}
-
-impl Default for DiagnosticSeverity {
-    fn default() -> Self {
-        Self::Unknown
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -268,6 +263,8 @@ pub struct GitDiffSummary {
 pub struct GitState {
     #[serde(default)]
     pub is_repository: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub status_error: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub branch: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -925,7 +922,8 @@ pub fn summarize_status(status: &CodebaseStatus) -> String {
 }
 
 pub fn status_hash(status: &CodebaseStatus) -> String {
-    let bytes = serde_json::to_vec(status).unwrap_or_default();
+    let bytes = serde_json::to_vec(status)
+        .unwrap_or_else(|err| format!("status-serialization-error:{err}").into_bytes());
     short_hash(&bytes)
 }
 
@@ -935,13 +933,18 @@ pub fn read_git_state(root: &Path) -> GitState {
     };
 
     let head = git_output(root, &["rev-parse", "HEAD"]);
-    let status_output = git_output(root, &["status", "--porcelain=v1"]).unwrap_or_default();
+    let (status_output, status_error) =
+        match git_output_raw_result(root, &["status", "--porcelain=v1"]) {
+            Ok(output) => (output, None),
+            Err(err) => (String::new(), Some(err)),
+        };
     let diff_summary =
         git_output(root, &["diff", "--shortstat"]).and_then(|output| parse_diff_shortstat(&output));
     let parsed = parse_git_status_porcelain(&status_output);
 
     GitState {
         is_repository: true,
+        status_error,
         branch: Some(branch),
         head,
         dirty_files: parsed.dirty_files,
@@ -1011,16 +1014,32 @@ pub fn parse_diff_shortstat(output: &str) -> Option<GitDiffSummary> {
 }
 
 fn git_output(root: &Path, args: &[&str]) -> Option<String> {
+    git_output_raw_result(root, args)
+        .ok()
+        .map(|output| output.trim().to_string())
+}
+
+fn git_output_raw_result(root: &Path, args: &[&str]) -> Result<String, String> {
     let output = Command::new("git")
         .arg("-C")
         .arg(root)
         .args(args)
         .output()
-        .ok()?;
+        .map_err(|err| format!("git {} failed to start: {err}", args.join(" ")))?;
     if !output.status.success() {
-        return None;
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!(
+            "git {} exited with {}{}",
+            args.join(" "),
+            output.status,
+            if stderr.trim().is_empty() {
+                String::new()
+            } else {
+                format!(": {}", stderr.trim())
+            }
+        ));
     }
-    Some(String::from_utf8_lossy(&output.stdout).trim().to_string())
+    Ok(String::from_utf8_lossy(&output.stdout).to_string())
 }
 
 fn parse_porcelain_path(raw: &str) -> PathBuf {

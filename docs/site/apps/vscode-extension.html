@@ -168,6 +168,7 @@
 <li><code>Marvis: Start Marvis</code></li>
 <li><code>Marvis: Show Status</code></li>
 <li><code>Marvis: Refresh Status</code></li>
+<li><code>Marvis: Check Autonomy Now</code></li>
 <li><code>Marvis: Ask Marvis</code></li>
 <li><code>Marvis: Ask About Selection</code></li>
 <li><code>Marvis: Fix Near Cursor</code></li>
@@ -181,8 +182,13 @@
 <p>Settings:</p>
 <div class="table-wrapper"><table><thead><tr><th>Setting</th><th>Default</th><th>Meaning</th></tr></thead><tbody>
 <tr><td><code>marvis.runtimePath</code></td><td>empty</td><td>Optional path to the <code>lite-code</code> binary.</td></tr>
-<tr><td><code>marvis.model</code></td><td><code>nvidia/nemotron-3-super-120b-a12b:free</code></td><td>Model passed to the Rust runtime.</td></tr>
+<tr><td><code>marvis.model</code></td><td><code>gpt-4.1-mini</code></td><td>Model passed to the Rust runtime.</td></tr>
+<tr><td><code>marvis.baseUrl</code></td><td>empty</td><td>Optional OpenAI-compatible base URL. Empty means use <code>MARVIS_BASE_URL</code> or <code>https://api.openai.com/v1</code>.</td></tr>
 <tr><td><code>marvis.maxTokens</code></td><td><code>4096</code></td><td>Maximum response tokens per model turn.</td></tr>
+<tr><td><code>marvis.autonomy.enabled</code></td><td><code>true</code></td><td>Enables suggest-first autonomous status checks.</td></tr>
+<tr><td><code>marvis.autonomy.idleDelayMs</code></td><td><code>3000</code></td><td>Debounce delay before a quiet status check.</td></tr>
+<tr><td><code>marvis.autonomy.heartbeatIntervalMs</code></td><td><code>30000</code></td><td>Low-frequency heartbeat interval while the runtime is active.</td></tr>
+<tr><td><code>marvis.agentProfiles</code></td><td>built-in Rust/test/explainer profiles</td><td>Agent model names, skill ids, MCP server ids, tool allowlists, approval defaults, and PAVE vectors.</td></tr>
 </tbody></table>
 </div>
 <h2 id="activation"><a class="header" href="#activation">Activation</a></h2>
@@ -204,12 +210,16 @@
 <li>status webview panel</li>
 <li>last status report</li>
 <li>last raw status</li>
+<li>last autonomy decision</li>
+<li>active suggestion</li>
 <li>debounce timer</li>
+<li>autonomy debounce and heartbeat timers</li>
 <li>recent opened/saved files</li>
 <li>command results</li>
 <li>running task map</li>
 <li>debug session map</li>
 <li>agent log</li>
+<li>process map</li>
 </ul>
 <p>Major methods:</p>
 <div class="table-wrapper"><table><thead><tr><th>Method</th><th>Purpose</th></tr></thead><tbody>
@@ -217,6 +227,7 @@
 <tr><td><code>start</code></td><td>Ensures runtime, refreshes status, and shows the panel.</td></tr>
 <tr><td><code>showStatus</code></td><td>Creates or reveals the webview panel.</td></tr>
 <tr><td><code>refreshStatus</code></td><td>Collects status and sends <code>status_update</code>.</td></tr>
+<tr><td><code>checkAutonomyNow</code></td><td>Sends a manual <code>autonomy_tick</code>.</td></tr>
 <tr><td><code>ask</code></td><td>Prompts the user for a request.</td></tr>
 <tr><td><code>askAboutSelection</code></td><td>Builds a prompt around selected code or cursor context.</td></tr>
 <tr><td><code>fixNearCursor</code></td><td>Confirms and asks Marvis to inspect and fix nearby issues.</td></tr>
@@ -226,6 +237,9 @@
 <tr><td><code>runTaskAndRecord</code></td><td>Runs a VSCode task and records exit status.</td></tr>
 <tr><td><code>runPrompt</code></td><td>Sends <code>user_prompt</code> with current status and handles streamed events.</td></tr>
 <tr><td><code>sendCommandResult</code></td><td>Sends command result to runtime if available.</td></tr>
+<tr><td><code>runAutonomyTick</code></td><td>Sends debounced or heartbeat status for autonomous LLM segmentation and routing.</td></tr>
+<tr><td><code>runSuggestedTask</code></td><td>Accepts a suggestion and runs it through the normal bounded process path.</td></tr>
+<tr><td><code>dismissSuggestion</code></td><td>Suppresses a suggestion through the runtime cooldown.</td></tr>
 <tr><td><code>ensureClient</code></td><td>Starts and initializes the Rust runtime.</td></tr>
 <tr><td><code>collectStatus</code></td><td>Builds the <code>VscodeStatus</code> JSON payload.</td></tr>
 <tr><td><code>scheduleStatusRefresh</code></td><td>Debounces status refresh after workspace changes.</td></tr>
@@ -276,14 +290,16 @@
 <li><code>truncate</code></li>
 <li><code>truncateTail</code></li>
 </ul>
-<p><code>collectStatus</code> sends active editor, open editors, visible ranges, selections, cursor bubble, recent files, diagnostics, terminal-like command results, running tasks, debug sessions, trust state, remote name, and VSCode app/profile name.</p>
+<p><code>collectStatus</code> sends active editor, open editors, visible ranges, selections, cursor bubble, recent files, diagnostics, terminal-like command results, running tasks, debug sessions, trust state, remote name, and VSCode app/profile name. When VSCode exposes shell-integration events, Marvis also records completed terminal shell executions and their output tail.</p>
+<p>Autonomy ticks are sent after diagnostics, saves, command/task results, debug termination, quiet editor changes, and the heartbeat. The extension does not start tool execution from a tick; it displays the returned suggestion and sends <code>run_suggested_task</code> only after acceptance.</p>
 <h2 id="webview-panel"><a class="header" href="#webview-panel">Webview Panel</a></h2>
 <p><code>renderPanelHtml()</code> returns a self-contained HTML document with:</p>
 <ul>
-<li>toolbar buttons for ask, refresh, run command, record failure</li>
+<li>toolbar buttons for ask, refresh, manual autonomy check, run command, record failure</li>
 <li>status summary section</li>
 <li>active segments section</li>
-<li>suggestion section</li>
+<li>suggestion section with accept/dismiss controls</li>
+<li>process section</li>
 <li>trace log section</li>
 </ul>
 <p>The panel uses VSCode theme variables and receives state through <code>postMessage</code>.</p>
@@ -291,9 +307,10 @@
 <p><code>resolveRuntime(context, workspaceRoot)</code> chooses:</p>
 <ol>
 <li>Configured <code>marvis.runtimePath</code> with <code>--vscode-stdio</code>.</li>
-<li><code>target/debug/lite-code</code> from the repo root.</li>
-<li><code>cargo run --quiet -- --vscode-stdio</code> from the repo root.</li>
+<li>Packaged binaries under <code>bin/&lt;platform&gt;-&lt;arch&gt;/lite-code</code> or <code>bin/lite-code</code>.</li>
+<li><code>target/debug/lite-code</code> from the repo root, only in VSCode extension development mode.</li>
 </ol>
+<p>If none of those exists, the extension returns a configuration error instead of invoking <code>cargo run</code>.</p>
 <h2 id="design-notes"><a class="header" href="#design-notes">Design Notes</a></h2>
 <p>The extension is intentionally thin with respect to agent behavior. It gathers high-quality IDE state and sends typed requests. Rust decides how to segment state, build the prompt context, run the model, and execute tools.</p>
 
@@ -301,7 +318,7 @@
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                            <a rel="prev" href="../runtime/tools.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                            <a rel="prev" href="../runtime/skills-mcp.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <i class="fa fa-angle-left"></i>
                             </a>
 
@@ -315,7 +332,7 @@
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                    <a rel="prev" href="../runtime/tools.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                    <a rel="prev" href="../runtime/skills-mcp.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <i class="fa fa-angle-left"></i>
                     </a>
 

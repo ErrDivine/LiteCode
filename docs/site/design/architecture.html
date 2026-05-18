@@ -159,6 +159,9 @@
 <pre><code class="language-text">VSCode extension
   -&gt; ui-bridge JSON request/response types
   -&gt; src/vscode.rs stdio server
+  -&gt; autonomy coordinator for status ticks and suggestions
+  -&gt; pave-router for task/agent scoring
+  -&gt; skill/MCP runtime for selected agent capabilities
   -&gt; status crate context capsule
   -&gt; session-kernel thread
   -&gt; scheduler model/tool turn
@@ -181,20 +184,23 @@ Web HTTP/SSE    -&gt; session-kernel -&gt; scheduler -&gt; tools -&gt; rollout
 <tr><td><code>session-kernel</code></td><td><code>protocol</code>, <code>rollout</code>, <code>thread-store</code></td><td>Runtime core. Depends on traits for scheduler and tools.</td></tr>
 <tr><td><code>scheduler</code></td><td><code>session-kernel</code>, <code>protocol</code>, <code>openai-rs</code></td><td>Implements <code>session-kernel::Scheduler</code>.</td></tr>
 <tr><td><code>status</code></td><td><code>serde</code>, git subprocesses</td><td>Deterministic workspace status model. Independent from scheduler.</td></tr>
-<tr><td><code>ui-bridge</code></td><td><code>protocol</code>, <code>status</code></td><td>Surface-specific event/request shapes.</td></tr>
+<tr><td><code>pave-router</code></td><td><code>serde</code>, <code>status</code></td><td>Sparse PAVE vectors, agent profiles, task candidates, route scoring.</td></tr>
+<tr><td><code>ui-bridge</code></td><td><code>protocol</code>, <code>status</code>, <code>pave-router</code></td><td>Surface-specific event/request shapes.</td></tr>
 <tr><td><code>lite-code</code> binary</td><td>all relevant crates</td><td>Composition root.</td></tr>
 </tbody></table>
 </div>
 <h2 id="composition-root"><a class="header" href="#composition-root">Composition Root</a></h2>
 <p><code>src/main.rs</code> composes:</p>
 <ul>
-<li><code>OpenAiScheduler::openrouter(api_key)</code> as the model scheduler.</li>
+<li><code>OpenAiScheduler::openai_compatible(config)</code> as the model scheduler.</li>
 <li><code>LocalToolExecutor</code> as the tool executor.</li>
 <li><code>ThreadManager::new(...)</code> as the thread runtime.</li>
-<li><code>tool_definitions()</code> as the dynamic tool surface.</li>
+<li><code>tool_definitions_for_policy(...)</code> as the dynamic tool surface.</li>
 <li><code>SessionConfig</code> as the per-thread runtime configuration.</li>
 </ul>
-<p><code>src/vscode.rs</code> composes the same pieces, but selects <code>SyntheticScheduler</code> when <code>OPENROUTER_API_KEY</code> is missing. That fallback allows VSCode status collection and bridge testing without a live model.</p>
+<p>The model endpoint is configured with <code>MARVIS_API_KEY</code> and <code>MARVIS_BASE_URL</code>. Missing <code>MARVIS_API_KEY</code> is a configuration error; the VSCode product does not fall back to a fake model.</p>
+<p>The VSCode autonomy path is also composed in the binary crate. The extension sends status ticks; <code>src/autonomy.rs</code> gates unchanged or non-actionable state, calls the OpenAI-compatible chat API for task segmentation, and routes tasks through <code>pave-router</code>. The result is a suggest-first decision, not automatic tool execution.</p>
+<p>Accepted suggestions are then capped to the routed profile approval. <code>src/skill_mcp.rs</code> resolves the selected profile's concrete skills and stdio MCP servers, injects selected skill bodies into the system prompt, and exposes only local tools/MCP tools allowed by the profile and skill capabilities. Stdio MCP startup requires shell approval because it launches a local process.</p>
 <h2 id="runtime-boundaries"><a class="header" href="#runtime-boundaries">Runtime Boundaries</a></h2>
 <h3 id="protocol-boundary"><a class="header" href="#protocol-boundary">Protocol Boundary</a></h3>
 <p>The protocol crate is the serialization boundary. Anything sent across process boundaries or written to rollout JSONL should be expressible as protocol types. This keeps UI shells and persistence from depending on internal scheduler structs.</p>
@@ -203,7 +209,7 @@ Web HTTP/SSE    -&gt; session-kernel -&gt; scheduler -&gt; tools -&gt; rollout
 <h3 id="scheduler-boundary"><a class="header" href="#scheduler-boundary">Scheduler Boundary</a></h3>
 <p>The scheduler is responsible for mapping a <code>TurnRequest</code> into model calls and tool calls. It sees history, dynamic tools, the tool executor, and a cancellation flag. It returns <code>SchedulerOutput</code>.</p>
 <h3 id="tool-boundary"><a class="header" href="#tool-boundary">Tool Boundary</a></h3>
-<p>The kernel only knows the <code>ToolExecutor</code> trait. The current implementation is <code>LocalToolExecutor</code> in the binary crate. Moving this into a dedicated crate would let policy, tracing, and permissions evolve without changing the kernel.</p>
+<p>The kernel only knows the <code>ToolExecutor</code> trait. The current implementation is <code>LocalToolExecutor</code> in the binary crate. It receives a <code>ToolPolicy</code>, exposes only allowed tool schemas for the current turn, can attach discovered MCP tool schemas, and still checks policy at execution time. Workspace writes create rollback snapshots before mutation. Moving this into a dedicated crate would let policy, tracing, and permissions evolve without changing the kernel.</p>
 <h3 id="status-boundary"><a class="header" href="#status-boundary">Status Boundary</a></h3>
 <p>The status crate produces deterministic summaries and context capsules. The model receives that capsule as text through the normal user-input path. This keeps context construction testable and prevents VSCode-specific types from leaking into the scheduler.</p>
 <h2 id="event-model"><a class="header" href="#event-model">Event Model</a></h2>

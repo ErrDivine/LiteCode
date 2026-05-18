@@ -14,18 +14,21 @@ At the top level the project is split into:
 | --- | --- |
 | `apps/vscode-extension` | VSCode product shell. It collects editor context and speaks newline-delimited JSON to the Rust binary. |
 | `src/main.rs` | Binary entrypoint. It selects CLI, web, or VSCode stdio mode. |
-| `src/tools.rs` | Current local tool executor for shell, file read/write/edit, directory listing, search, and glob discovery. |
+| `src/tools.rs` | Current local tool executor for shell, file read/write/edit, directory listing, search, glob discovery, safe test/build helpers, and runtime policy gates. |
+| `src/skill_mcp.rs` | Skill registry, selected skill injection, stdio MCP discovery, and MCP tool execution. |
 | `src/web.rs` | Temporary HTTP/SSE web harness. |
 | `src/vscode.rs` | Runtime side of the VSCode stdio bridge. |
 | `crates/protocol` | Runtime-neutral operations, events, ids, user inputs, response items, and rollout records. |
 | `crates/session-kernel` | Thread lifecycle, submissions, event channels, history, replay, forking, and turn orchestration boundary. |
-| `crates/scheduler` | Model turn execution against OpenAI-compatible chat completions plus a synthetic scheduler. |
+| `crates/scheduler` | Model turn execution against OpenAI-compatible chat completions plus a synthetic scheduler used only by tests/dev code. |
 | `crates/openai-rs` | Reusable OpenAI-compatible HTTP and streaming client. |
 | `crates/status` | VSCode/codebase status model, deterministic segments, stuckness detection, git state, and context capsules. |
+| `crates/pave-router` | Rust JSON PAVE vectors, agent profiles, task candidates, and route scoring. |
 | `crates/ui-bridge` | Adapters from kernel events into CLI, web SSE, and VSCode runtime event shapes. |
 | `crates/rollout` | JSONL session recording and listing. |
-| `crates/thread-store` | Storage-neutral thread persistence interface, with local JSONL implementation and remote stub. |
+| `crates/thread-store` | Storage-neutral thread persistence interface with local JSONL history and sidecar metadata. |
 | `crates/state-store` | Local JSONL metadata/log shell for future state persistence. |
+| `src/autonomy.rs` | Autonomous wake-up coordinator, LLM problem segmentation, suggestion cooldowns, and PAVE routing. |
 
 ## Reading Path
 

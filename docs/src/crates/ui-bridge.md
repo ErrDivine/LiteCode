@@ -13,10 +13,13 @@
 
 | Variant | Payload |
 | --- | --- |
-| `Initialize` | workspace root, optional model, optional max tokens |
+| `Initialize` | workspace root, optional model, optional base URL, optional max tokens, agent profiles |
 | `StatusUpdate` | `VscodeStatus` |
 | `CommandResult` | `CommandResult` |
-| `UserPrompt` | prompt plus optional `VscodeStatus` |
+| `UserPrompt` | prompt plus optional `VscodeStatus` and per-prompt approval grants |
+| `AutonomyTick` | `VscodeStatus`, trigger, and optional current agent profiles |
+| `RunSuggestedTask` | suggestion id plus requested approval grants; runtime caps them to the stored route approval |
+| `DismissSuggestion` | suggestion id |
 | `Shutdown` | no payload |
 
 These requests are sent as newline-delimited JSON over child-process stdio.
@@ -38,11 +41,15 @@ Constructors:
 - `Ready`
 - `StatusReport`
 - `AgentEvent`
+- `ProcessUpdate`
+- `AutonomyDecision`
 - `Complete`
 - `Error`
 - `ShutdownComplete`
 
-The `Ready` response includes workspace root, model, synthetic-model flag, and initial status report.
+The `Ready` response includes workspace root, model, base URL, and initial status report.
+
+`AutonomyDecision` is one of `idle`, `suggest`, or `suppressed`. A suggestion includes the selected route, task, agent profile, PAVE scores, and required approval flags.
 
 ## VSCode Runtime Events
 
@@ -96,4 +103,4 @@ The web harness writes these as Server-Sent Events.
 
 ## Design Notes
 
-The bridge is intentionally shallow. It should map and format, not decide runtime behavior. Business logic belongs in `session-kernel`, `scheduler`, or `status`.
+The bridge is intentionally shallow. It should map and format, not decide runtime behavior. Business logic belongs in `session-kernel`, `scheduler`, `status`, `pave-router`, or the binary composition layer.

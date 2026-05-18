@@ -7,6 +7,7 @@ The root binary crate composes all runtime pieces and exposes three execution mo
 Modules:
 
 - `tools`
+- `autonomy`
 - `vscode`
 - `web`
 
@@ -14,10 +15,11 @@ Main responsibilities:
 
 - Parse CLI flags.
 - Select VSCode stdio, web, or CLI mode.
-- Read `OPENROUTER_API_KEY` for CLI and web modes.
+- Read `MARVIS_API_KEY` and optional `MARVIS_BASE_URL`.
 - Build `OpenAiScheduler`, `LocalToolExecutor`, and `ThreadManager`.
-- Start a thread with local tool definitions.
+- Start a thread with policy-filtered local tool definitions.
 - Consume runtime events and adapt them for the selected UI.
+- In VSCode mode, evaluate autonomous status ticks and route suggestions.
 
 ### CLI Flags
 
@@ -25,8 +27,12 @@ Main responsibilities:
 
 - `--web`: launch web UI instead of CLI mode.
 - `--vscode-stdio`: run the VSCode extension JSON stdio bridge.
-- `--model`, `-m`: model name, default `nvidia/nemotron-3-super-120b-a12b:free`.
+- `--print-trace <path>`: print a rollout trace summary and exit.
+- `--model`, `-m`: model name, default `gpt-4.1-mini`.
+- `--base-url`: OpenAI-compatible base URL override.
 - `--max-tokens`: maximum tokens per response, default `4096`.
+- `--allow-workspace-write`: allow file writes in CLI/web harnesses.
+- `--allow-risky-shell`: allow broader shell/git/network-like commands in CLI/web harnesses.
 
 ### System Prompt
 
@@ -46,9 +52,9 @@ Main responsibilities:
 
 Flow:
 
-1. Require `OPENROUTER_API_KEY`.
-2. Start an OpenRouter scheduler.
-3. Start a thread with local dynamic tools.
+1. Require `MARVIS_API_KEY`.
+2. Start an OpenAI-compatible scheduler.
+3. Start a thread with policy-filtered local dynamic tools.
 4. Read stdin lines.
 5. Submit each line as text input.
 6. Print streamed deltas, tool logs, errors, and completion.
@@ -70,6 +76,7 @@ Routes:
 - history root
 - model
 - max tokens
+- tool policy
 
 `run_thread_loop`:
 
@@ -89,7 +96,7 @@ The VSCode stdio server is the product runtime surface.
 
 ### Public Entrypoint
 
-`serve_stdio(default_model, default_max_tokens)`:
+`serve_stdio(default_model, default_base_url, default_max_tokens)`:
 
 - Reads lines from stdin.
 - Parses `VscodeRequestEnvelope`.
@@ -103,10 +110,13 @@ Fields:
 
 - workspace root
 - `StatusStore`
-- optional `ThreadManager`
+- optional OpenAI-compatible provider config
 - model
+- base URL
 - max tokens
-- synthetic-model flag
+- next process id
+- configured agent profiles
+- autonomy coordinator
 
 ### Request Handling
 
@@ -114,9 +124,7 @@ Fields:
 
 - Sets workspace root, model, and max tokens.
 - Creates a new `StatusStore`.
-- Uses `OpenAiScheduler` if `OPENROUTER_API_KEY` is set.
-- Uses `SyntheticScheduler` otherwise.
-- Creates a `ThreadManager`.
+- Loads `MARVIS_API_KEY` and base URL.
 - Returns `Ready`.
 
 `StatusUpdate`:
@@ -134,11 +142,36 @@ Fields:
 `UserPrompt`:
 
 - Optionally updates status.
+- Applies per-prompt approval to build a tool policy.
 - Builds a context capsule.
-- Starts a new thread with tools.
+- Starts a new thread with policy-filtered tools.
+- Emits process updates.
 - Submits the capsule text.
 - Streams mapped runtime events as `AgentEvent`.
 - Refreshes status and returns `Complete`.
+
+`AutonomyTick`:
+
+- Updates VSCode status and git state.
+- Skips unchanged, non-actionable, or in-flight state.
+- Calls the OpenAI-compatible model for strict JSON task segmentation.
+- Routes task candidates against configured agent profiles with PAVE cosine scoring.
+- Returns `AutonomyDecision::Idle`, `Suggest`, or `Suppressed`.
+
+`RunSuggestedTask`:
+
+- Looks up a stored suggestion.
+- Caps the request approval to the stored routed approval.
+- Resolves the selected agent's skills and MCP servers.
+- Adds selected skill instructions to the system prompt.
+- Filters visible tools by runtime policy, skill capabilities, and the agent tool allowlist.
+- Exposes discovered stdio MCP tools only when MCP discovery succeeds.
+- Runs the existing bounded VSCode prompt flow.
+
+`DismissSuggestion`:
+
+- Records a cooldown for the suggestion id.
+- Returns a suppressed autonomy decision.
 
 `Shutdown`:
 

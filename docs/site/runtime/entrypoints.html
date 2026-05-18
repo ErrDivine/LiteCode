@@ -159,6 +159,7 @@
 <p>Modules:</p>
 <ul>
 <li><code>tools</code></li>
+<li><code>autonomy</code></li>
 <li><code>vscode</code></li>
 <li><code>web</code></li>
 </ul>
@@ -166,18 +167,23 @@
 <ul>
 <li>Parse CLI flags.</li>
 <li>Select VSCode stdio, web, or CLI mode.</li>
-<li>Read <code>OPENROUTER_API_KEY</code> for CLI and web modes.</li>
+<li>Read <code>MARVIS_API_KEY</code> and optional <code>MARVIS_BASE_URL</code>.</li>
 <li>Build <code>OpenAiScheduler</code>, <code>LocalToolExecutor</code>, and <code>ThreadManager</code>.</li>
-<li>Start a thread with local tool definitions.</li>
+<li>Start a thread with policy-filtered local tool definitions.</li>
 <li>Consume runtime events and adapt them for the selected UI.</li>
+<li>In VSCode mode, evaluate autonomous status ticks and route suggestions.</li>
 </ul>
 <h3 id="cli-flags"><a class="header" href="#cli-flags">CLI Flags</a></h3>
 <p><code>Cli</code> fields:</p>
 <ul>
 <li><code>--web</code>: launch web UI instead of CLI mode.</li>
 <li><code>--vscode-stdio</code>: run the VSCode extension JSON stdio bridge.</li>
-<li><code>--model</code>, <code>-m</code>: model name, default <code>nvidia/nemotron-3-super-120b-a12b:free</code>.</li>
+<li><code>--print-trace &lt;path&gt;</code>: print a rollout trace summary and exit.</li>
+<li><code>--model</code>, <code>-m</code>: model name, default <code>gpt-4.1-mini</code>.</li>
+<li><code>--base-url</code>: OpenAI-compatible base URL override.</li>
 <li><code>--max-tokens</code>: maximum tokens per response, default <code>4096</code>.</li>
+<li><code>--allow-workspace-write</code>: allow file writes in CLI/web harnesses.</li>
+<li><code>--allow-risky-shell</code>: allow broader shell/git/network-like commands in CLI/web harnesses.</li>
 </ul>
 <h3 id="system-prompt"><a class="header" href="#system-prompt">System Prompt</a></h3>
 <p><code>SYSTEM_PROMPT</code> tells the model it is a coding assistant inside the user's project directory, with tools for shell, read/write/edit, directory listing, and search. It asks the model to inspect real project contents, prefer targeted edits, verify progress, and summarize briefly.</p>
@@ -193,9 +199,9 @@
 <h2 id="cli-mode"><a class="header" href="#cli-mode">CLI Mode</a></h2>
 <p>Flow:</p>
 <ol>
-<li>Require <code>OPENROUTER_API_KEY</code>.</li>
-<li>Start an OpenRouter scheduler.</li>
-<li>Start a thread with local dynamic tools.</li>
+<li>Require <code>MARVIS_API_KEY</code>.</li>
+<li>Start an OpenAI-compatible scheduler.</li>
+<li>Start a thread with policy-filtered local dynamic tools.</li>
 <li>Read stdin lines.</li>
 <li>Submit each line as text input.</li>
 <li>Print streamed deltas, tool logs, errors, and completion.</li>
@@ -214,6 +220,7 @@
 <li>history root</li>
 <li>model</li>
 <li>max tokens</li>
+<li>tool policy</li>
 </ul>
 <p><code>run_thread_loop</code>:</p>
 <ol>
@@ -229,7 +236,7 @@
 <h2 id="srcvscoders"><a class="header" href="#srcvscoders"><code>src/vscode.rs</code></a></h2>
 <p>The VSCode stdio server is the product runtime surface.</p>
 <h3 id="public-entrypoint"><a class="header" href="#public-entrypoint">Public Entrypoint</a></h3>
-<p><code>serve_stdio(default_model, default_max_tokens)</code>:</p>
+<p><code>serve_stdio(default_model, default_base_url, default_max_tokens)</code>:</p>
 <ul>
 <li>Reads lines from stdin.</li>
 <li>Parses <code>VscodeRequestEnvelope</code>.</li>
@@ -242,19 +249,20 @@
 <ul>
 <li>workspace root</li>
 <li><code>StatusStore</code></li>
-<li>optional <code>ThreadManager</code></li>
+<li>optional OpenAI-compatible provider config</li>
 <li>model</li>
+<li>base URL</li>
 <li>max tokens</li>
-<li>synthetic-model flag</li>
+<li>next process id</li>
+<li>configured agent profiles</li>
+<li>autonomy coordinator</li>
 </ul>
 <h3 id="request-handling"><a class="header" href="#request-handling">Request Handling</a></h3>
 <p><code>Initialize</code>:</p>
 <ul>
 <li>Sets workspace root, model, and max tokens.</li>
 <li>Creates a new <code>StatusStore</code>.</li>
-<li>Uses <code>OpenAiScheduler</code> if <code>OPENROUTER_API_KEY</code> is set.</li>
-<li>Uses <code>SyntheticScheduler</code> otherwise.</li>
-<li>Creates a <code>ThreadManager</code>.</li>
+<li>Loads <code>MARVIS_API_KEY</code> and base URL.</li>
 <li>Returns <code>Ready</code>.</li>
 </ul>
 <p><code>StatusUpdate</code>:</p>
@@ -272,11 +280,36 @@
 <p><code>UserPrompt</code>:</p>
 <ul>
 <li>Optionally updates status.</li>
+<li>Applies per-prompt approval to build a tool policy.</li>
 <li>Builds a context capsule.</li>
-<li>Starts a new thread with tools.</li>
+<li>Starts a new thread with policy-filtered tools.</li>
+<li>Emits process updates.</li>
 <li>Submits the capsule text.</li>
 <li>Streams mapped runtime events as <code>AgentEvent</code>.</li>
 <li>Refreshes status and returns <code>Complete</code>.</li>
+</ul>
+<p><code>AutonomyTick</code>:</p>
+<ul>
+<li>Updates VSCode status and git state.</li>
+<li>Skips unchanged, non-actionable, or in-flight state.</li>
+<li>Calls the OpenAI-compatible model for strict JSON task segmentation.</li>
+<li>Routes task candidates against configured agent profiles with PAVE cosine scoring.</li>
+<li>Returns <code>AutonomyDecision::Idle</code>, <code>Suggest</code>, or <code>Suppressed</code>.</li>
+</ul>
+<p><code>RunSuggestedTask</code>:</p>
+<ul>
+<li>Looks up a stored suggestion.</li>
+<li>Caps the request approval to the stored routed approval.</li>
+<li>Resolves the selected agent's skills and MCP servers.</li>
+<li>Adds selected skill instructions to the system prompt.</li>
+<li>Filters visible tools by runtime policy, skill capabilities, and the agent tool allowlist.</li>
+<li>Exposes discovered stdio MCP tools only when MCP discovery succeeds.</li>
+<li>Runs the existing bounded VSCode prompt flow.</li>
+</ul>
+<p><code>DismissSuggestion</code>:</p>
+<ul>
+<li>Records a cooldown for the suggestion id.</li>
+<li>Returns a suppressed autonomy decision.</li>
 </ul>
 <p><code>Shutdown</code>:</p>
 <ul>

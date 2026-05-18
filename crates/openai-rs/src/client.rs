@@ -12,7 +12,7 @@ use std::time::Duration;
 ///
 /// let client = Client::builder()
 ///     .api_key("sk-...")
-///     .base_url("https://openrouter.ai/api/v1")
+///     .base_url("https://api.openai.com/v1")
 ///     .build()
 ///     .unwrap();
 /// ```

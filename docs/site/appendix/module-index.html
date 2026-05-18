@@ -158,9 +158,11 @@
 <h2 id="root-binary-crate"><a class="header" href="#root-binary-crate">Root Binary Crate</a></h2>
 <div class="table-wrapper"><table><thead><tr><th>File</th><th>Responsibility</th></tr></thead><tbody>
 <tr><td><code>src/main.rs</code></td><td>Binary entrypoint, CLI parsing, mode selection, runtime composition, CLI loop, shared system prompt.</td></tr>
+<tr><td><code>src/autonomy.rs</code></td><td>Autonomous wake-up coordinator, LLM problem segmentation, suggestion cooldowns, PAVE routing, accepted suggestion prompt building.</td></tr>
+<tr><td><code>src/skill_mcp.rs</code></td><td>Skill registry, selected skill rendering, stdio MCP discovery, tool qualification, and MCP tool calls.</td></tr>
 <tr><td><code>src/web.rs</code></td><td>Axum web harness, static HTML serving, chat endpoint, SSE event stream, web thread setup.</td></tr>
 <tr><td><code>src/vscode.rs</code></td><td>VSCode stdio server, request dispatch, status store integration, context capsule submission, streamed VSCode events.</td></tr>
-<tr><td><code>src/tools.rs</code></td><td>Dynamic local tool definitions and executor implementation.</td></tr>
+<tr><td><code>src/tools.rs</code></td><td>Dynamic local/MCP tool definitions, executor implementation, policy checks, and rollback snapshots.</td></tr>
 <tr><td><code>static/index.html</code></td><td>Temporary web harness frontend bundled into <code>src/web.rs</code>.</td></tr>
 </tbody></table>
 </div>
@@ -184,7 +186,7 @@
 </div>
 <h2 id="cratesscheduler"><a class="header" href="#cratesscheduler"><code>crates/scheduler</code></a></h2>
 <div class="table-wrapper"><table><thead><tr><th>File</th><th>Responsibility</th></tr></thead><tbody>
-<tr><td><code>crates/scheduler/src/lib.rs</code></td><td>OpenAI-compatible scheduler, synthetic scheduler, dynamic tool conversion, response history conversion.</td></tr>
+<tr><td><code>crates/scheduler/src/lib.rs</code></td><td>OpenAI-compatible scheduler config, model turn loop, tool budget enforcement, synthetic test scheduler, dynamic tool conversion, response history conversion.</td></tr>
 </tbody></table>
 </div>
 <h2 id="cratesopenai-rs"><a class="header" href="#cratesopenai-rs"><code>crates/openai-rs</code></a></h2>
@@ -211,10 +213,15 @@
 <tr><td><code>crates/status/src/lib.rs</code></td><td>Workspace status model, VSCode status model, git parsing, segmentation, stuckness detection, context capsules.</td></tr>
 </tbody></table>
 </div>
+<h2 id="cratespave-router"><a class="header" href="#cratespave-router"><code>crates/pave-router</code></a></h2>
+<div class="table-wrapper"><table><thead><tr><th>File</th><th>Responsibility</th></tr></thead><tbody>
+<tr><td><code>crates/pave-router/src/lib.rs</code></td><td>Sparse PAVE vectors, tool access flags, agent profiles, task candidates, route scoring, default profiles.</td></tr>
+</tbody></table>
+</div>
 <h2 id="persistence"><a class="header" href="#persistence">Persistence</a></h2>
 <div class="table-wrapper"><table><thead><tr><th>File</th><th>Responsibility</th></tr></thead><tbody>
-<tr><td><code>crates/rollout/src/lib.rs</code></td><td>JSONL session metadata and response history recording, reading, listing, archive path support.</td></tr>
-<tr><td><code>crates/thread-store/src/lib.rs</code></td><td>Thread persistence trait, local rollout-backed store, remote stub, append helper.</td></tr>
+<tr><td><code>crates/rollout/src/lib.rs</code></td><td>JSONL session metadata, response history, event trace recording, reading, listing, archive path support.</td></tr>
+<tr><td><code>crates/thread-store/src/lib.rs</code></td><td>Thread persistence trait, local rollout-backed store, metadata sidecars, explicit unavailable-store adapter, append helper.</td></tr>
 <tr><td><code>crates/state-store/src/lib.rs</code></td><td>Local metadata/log appenders and migration marker.</td></tr>
 </tbody></table>
 </div>

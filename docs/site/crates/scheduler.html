@@ -158,18 +158,21 @@
 <h2 id="public-types"><a class="header" href="#public-types">Public Types</a></h2>
 <div class="table-wrapper"><table><thead><tr><th>Type</th><th>Purpose</th></tr></thead><tbody>
 <tr><td><code>OpenAiScheduler</code></td><td>Real model scheduler backed by <code>openai-rs::Client</code>.</td></tr>
-<tr><td><code>SyntheticScheduler</code></td><td>Deterministic fallback scheduler for bridge and status testing.</td></tr>
+<tr><td><code>OpenAiCompatibleConfig</code></td><td>API key and base URL for an OpenAI-compatible provider.</td></tr>
+<tr><td><code>SyntheticScheduler</code></td><td>Deterministic scheduler used by tests/dev code, not by the VSCode product fallback path.</td></tr>
 </tbody></table>
 </div>
 <h2 id="openaischeduler"><a class="header" href="#openaischeduler">OpenAiScheduler</a></h2>
 <p>Constructors:</p>
 <ul>
 <li><code>OpenAiScheduler::new(client)</code></li>
-<li><code>OpenAiScheduler::openrouter(api_key)</code></li>
+<li><code>OpenAiScheduler::openai_compatible(config)</code></li>
 </ul>
-<p><code>openrouter</code> builds a client with base URL:</p>
-<pre><code class="language-text">https://openrouter.ai/api/v1
-</code></pre>
+<p><code>openai_compatible</code> builds a client from:</p>
+<ul>
+<li><code>config.api_key</code></li>
+<li><code>config.base_url</code></li>
+</ul>
 <p>and maps client construction errors into <code>KernelError::InvalidRequest</code>.</p>
 <h2 id="turn-execution"><a class="header" href="#turn-execution">Turn Execution</a></h2>
 <p><code>run_turn</code> performs this loop:</p>
@@ -184,7 +187,7 @@
 <li>If there are no tool calls, return final assistant message as <code>SchedulerOutput</code>.</li>
 <li>If there are tool calls, emit tool begin/end events, execute each tool, append tool results to the chat messages, and continue the loop.</li>
 </ol>
-<p>The scheduler checks <code>request.cancellation.is_cancelled()</code> before starting a request and while reading stream events.</p>
+<p>The scheduler checks <code>request.cancellation.is_cancelled()</code> before starting a request and while reading stream events. It also stops execution when <code>request.max_tool_calls</code> is exceeded.</p>
 <h2 id="tool-call-assembly"><a class="header" href="#tool-call-assembly">Tool Call Assembly</a></h2>
 <p>OpenAI-compatible streaming tool calls arrive as indexed deltas. The scheduler accumulates three strings per index:</p>
 <ul>
@@ -197,12 +200,12 @@
 <p><code>history_to_messages</code> maps:</p>
 <ul>
 <li><code>ResponseItem::Message</code> with role <code>system</code>, <code>user</code>, or <code>assistant</code> to corresponding chat messages.</li>
+<li>Consecutive <code>ResponseItem::FunctionCall</code> values to one assistant message with tool calls.</li>
 <li><code>ResponseItem::FunctionCallOutput</code> to a tool result message.</li>
-<li><code>ResponseItem::FunctionCall</code> is ignored today.</li>
 </ul>
-<p>This keeps current model requests simple but means persisted tool call records are not replayed as assistant tool-call messages yet.</p>
+<p>The scheduler returns function-call and function-call-output response items alongside the final assistant message, so future turns can replay tool history without malformed tool-result-only chat history.</p>
 <h2 id="syntheticscheduler"><a class="header" href="#syntheticscheduler">SyntheticScheduler</a></h2>
-<p>The synthetic scheduler is used when the VSCode runtime starts without <code>OPENROUTER_API_KEY</code>.</p>
+<p>The synthetic scheduler is used by tests and explicit development code only.</p>
 <p>Behavior:</p>
 <ul>
 <li>Join text input items with newlines.</li>
@@ -210,7 +213,7 @@
 <li>Emit one <code>AgentMessageDelta</code>.</li>
 <li>Return a single assistant <code>ResponseItem</code>.</li>
 </ul>
-<p>This allows extension development, status collection, and bridge tests without a real model.</p>
+<p>It is not selected automatically by the VSCode product when provider config is missing.</p>
 <h2 id="design-notes"><a class="header" href="#design-notes">Design Notes</a></h2>
 <p>The scheduler is the only crate that knows both kernel turn semantics and OpenAI-compatible chat types. That is the correct place for message mapping, stream parsing, and tool-loop behavior.</p>
 <p>Provider-specific behavior is kept in <code>openai-rs</code>, while product-specific context construction stays in <code>status</code> and <code>src/vscode.rs</code>.</p>

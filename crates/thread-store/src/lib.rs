@@ -6,12 +6,16 @@ use protocol::{ResponseItem, ThreadId};
 use rollout::{RolloutConfig, RolloutRecorder, RolloutRecorderParams};
 use serde::{Deserialize, Serialize};
 
+const THREAD_METADATA_SUBDIR: &str = "thread_metadata";
+
 #[derive(Debug, thiserror::Error)]
 pub enum ThreadStoreError {
     #[error("thread was not found: {0}")]
     NotFound(ThreadId),
     #[error(transparent)]
     Io(#[from] std::io::Error),
+    #[error(transparent)]
+    Json(#[from] serde_json::Error),
     #[error(transparent)]
     Rollout(#[from] anyhow::Error),
 }
@@ -58,6 +62,11 @@ pub struct ThreadMetadataPatch {
     pub name: Option<String>,
 }
 
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ThreadMetadata {
+    pub name: Option<String>,
+}
+
 #[derive(Debug, Clone)]
 pub struct UpdateThreadMetadataParams {
     pub thread_id: ThreadId,
@@ -68,6 +77,7 @@ pub struct UpdateThreadMetadataParams {
 pub struct StoredThread {
     pub thread_id: ThreadId,
     pub rollout_path: PathBuf,
+    pub metadata: ThreadMetadata,
 }
 
 #[derive(Debug, Clone)]
@@ -75,6 +85,7 @@ pub struct StoredThreadHistory {
     pub thread_id: ThreadId,
     pub items: Vec<RolloutItem>,
     pub response_items: Vec<ResponseItem>,
+    pub metadata: ThreadMetadata,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -113,6 +124,58 @@ impl LocalThreadStore {
     fn rollout_path(&self, thread_id: &ThreadId) -> PathBuf {
         rollout::rollout_path_for_thread(&self.root, thread_id)
     }
+
+    fn archived_rollout_path(&self, thread_id: &ThreadId) -> PathBuf {
+        self.root
+            .join(rollout::ARCHIVED_SESSIONS_SUBDIR)
+            .join(format!("{thread_id}.jsonl"))
+    }
+
+    fn metadata_path(&self, thread_id: &ThreadId) -> PathBuf {
+        self.root
+            .join(THREAD_METADATA_SUBDIR)
+            .join(format!("{thread_id}.json"))
+    }
+
+    fn thread_exists(&self, thread_id: &ThreadId) -> bool {
+        self.rollout_path(thread_id).exists() || self.archived_rollout_path(thread_id).exists()
+    }
+
+    async fn read_metadata(&self, thread_id: &ThreadId) -> ThreadStoreResult<ThreadMetadata> {
+        let path = self.metadata_path(thread_id);
+        match tokio::fs::read_to_string(&path).await {
+            Ok(contents) => Ok(serde_json::from_str(&contents)?),
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(ThreadMetadata::default()),
+            Err(err) => Err(err.into()),
+        }
+    }
+
+    async fn write_metadata(
+        &self,
+        thread_id: &ThreadId,
+        metadata: &ThreadMetadata,
+    ) -> ThreadStoreResult<()> {
+        let path = self.metadata_path(thread_id);
+        if let Some(parent) = path.parent() {
+            tokio::fs::create_dir_all(parent).await?;
+        }
+        let bytes = serde_json::to_vec_pretty(metadata)?;
+        tokio::fs::write(path, bytes).await?;
+        Ok(())
+    }
+
+    async fn stored_thread(
+        &self,
+        thread_id: ThreadId,
+        rollout_path: PathBuf,
+    ) -> ThreadStoreResult<StoredThread> {
+        let metadata = self.read_metadata(&thread_id).await?;
+        Ok(StoredThread {
+            thread_id,
+            rollout_path,
+            metadata,
+        })
+    }
 }
 
 #[async_trait]
@@ -131,10 +194,8 @@ impl ThreadStore for LocalThreadStore {
         })
         .await?;
 
-        Ok(StoredThread {
-            thread_id: params.thread_id,
-            rollout_path: recorder.path().to_path_buf(),
-        })
+        self.stored_thread(params.thread_id, recorder.path().to_path_buf())
+            .await
     }
 
     async fn append_items(&self, params: AppendThreadItemsParams) -> ThreadStoreResult<()> {
@@ -150,10 +211,7 @@ impl ThreadStore for LocalThreadStore {
         if !path.exists() {
             return Err(ThreadStoreError::NotFound(params.thread_id));
         }
-        Ok(StoredThread {
-            thread_id: params.thread_id,
-            rollout_path: path,
-        })
+        self.stored_thread(params.thread_id, path).await
     }
 
     async fn load_history(
@@ -175,6 +233,7 @@ impl ThreadStore for LocalThreadStore {
             .collect();
 
         Ok(StoredThreadHistory {
+            metadata: self.read_metadata(&params.thread_id).await?,
             thread_id: params.thread_id,
             items,
             response_items,
@@ -190,16 +249,12 @@ impl ThreadStore for LocalThreadStore {
         )
         .await?;
 
-        Ok(ThreadPage {
-            threads: page
-                .items
-                .into_iter()
-                .map(|item| StoredThread {
-                    thread_id: item.thread_id,
-                    rollout_path: item.path,
-                })
-                .collect(),
-        })
+        let mut threads = Vec::new();
+        for item in page.items {
+            threads.push(self.stored_thread(item.thread_id, item.path).await?);
+        }
+
+        Ok(ThreadPage { threads })
     }
 
     async fn archive_thread(&self, params: ArchiveThreadParams) -> ThreadStoreResult<()> {
@@ -214,45 +269,69 @@ impl ThreadStore for LocalThreadStore {
         Ok(())
     }
 
-    async fn update_metadata(&self, _params: UpdateThreadMetadataParams) -> ThreadStoreResult<()> {
-        Ok(())
+    async fn update_metadata(&self, params: UpdateThreadMetadataParams) -> ThreadStoreResult<()> {
+        if !self.thread_exists(&params.thread_id) {
+            return Err(ThreadStoreError::NotFound(params.thread_id));
+        }
+        let mut metadata = self.read_metadata(&params.thread_id).await?;
+        if let Some(name) = params.metadata.name {
+            metadata.name = Some(name);
+        }
+        self.write_metadata(&params.thread_id, &metadata).await
     }
 }
 
-#[derive(Debug, Clone, Default)]
-pub struct RemoteThreadStore;
+#[derive(Debug, Clone)]
+pub struct UnavailableThreadStore {
+    reason: String,
+}
+
+impl UnavailableThreadStore {
+    pub fn new(reason: impl Into<String>) -> Self {
+        Self {
+            reason: reason.into(),
+        }
+    }
+
+    fn error<T>(&self) -> ThreadStoreResult<T> {
+        Err(ThreadStoreError::Io(std::io::Error::new(
+            std::io::ErrorKind::Unsupported,
+            self.reason.clone(),
+        )))
+    }
+}
 
 #[async_trait]
-impl ThreadStore for RemoteThreadStore {
-    async fn create_thread(&self, params: CreateThreadParams) -> ThreadStoreResult<StoredThread> {
-        Err(ThreadStoreError::NotFound(params.thread_id))
+impl ThreadStore for UnavailableThreadStore {
+    async fn create_thread(&self, _params: CreateThreadParams) -> ThreadStoreResult<StoredThread> {
+        self.error()
     }
 
-    async fn append_items(&self, params: AppendThreadItemsParams) -> ThreadStoreResult<()> {
-        Err(ThreadStoreError::NotFound(params.thread_id))
+    async fn append_items(&self, _params: AppendThreadItemsParams) -> ThreadStoreResult<()> {
+        self.error()
     }
 
-    async fn read_thread(&self, params: ReadThreadParams) -> ThreadStoreResult<StoredThread> {
-        Err(ThreadStoreError::NotFound(params.thread_id))
+    async fn read_thread(&self, _params: ReadThreadParams) -> ThreadStoreResult<StoredThread> {
+        self.error()
     }
 
     async fn load_history(
         &self,
-        params: LoadThreadHistoryParams,
+        _params: LoadThreadHistoryParams,
     ) -> ThreadStoreResult<StoredThreadHistory> {
-        Err(ThreadStoreError::NotFound(params.thread_id))
+        self.error()
     }
 
     async fn list_threads(&self, _params: ListThreadsParams) -> ThreadStoreResult<ThreadPage> {
-        Ok(ThreadPage::default())
+        self.error()
     }
 
-    async fn archive_thread(&self, params: ArchiveThreadParams) -> ThreadStoreResult<()> {
-        Err(ThreadStoreError::NotFound(params.thread_id))
+    async fn archive_thread(&self, _params: ArchiveThreadParams) -> ThreadStoreResult<()> {
+        self.error()
     }
 
-    async fn update_metadata(&self, params: UpdateThreadMetadataParams) -> ThreadStoreResult<()> {
-        Err(ThreadStoreError::NotFound(params.thread_id))
+    async fn update_metadata(&self, _params: UpdateThreadMetadataParams) -> ThreadStoreResult<()> {
+        self.error()
     }
 }
 
@@ -340,6 +419,18 @@ mod tests {
             })
             .await
             .unwrap();
+        assert_eq!(
+            store
+                .read_thread(ReadThreadParams {
+                    thread_id: thread_id.clone()
+                })
+                .await
+                .unwrap()
+                .metadata
+                .name
+                .as_deref(),
+            Some("name")
+        );
         store
             .archive_thread(ArchiveThreadParams {
                 thread_id: thread_id.clone(),
@@ -347,16 +438,13 @@ mod tests {
             .await
             .unwrap();
 
-        assert_eq!(
-            store
-                .list_threads(ListThreadsParams {
-                    include_archived: true
-                })
-                .await
-                .unwrap()
-                .threads
-                .len(),
-            1
-        );
+        let archived = store
+            .list_threads(ListThreadsParams {
+                include_archived: true,
+            })
+            .await
+            .unwrap();
+        assert_eq!(archived.threads.len(), 1);
+        assert_eq!(archived.threads[0].metadata.name.as_deref(), Some("name"));
     }
 }

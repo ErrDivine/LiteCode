@@ -162,18 +162,21 @@
 <div class="table-wrapper"><table><thead><tr><th>Area</th><th>Role</th></tr></thead><tbody>
 <tr><td><code>apps/vscode-extension</code></td><td>VSCode product shell. It collects editor context and speaks newline-delimited JSON to the Rust binary.</td></tr>
 <tr><td><code>src/main.rs</code></td><td>Binary entrypoint. It selects CLI, web, or VSCode stdio mode.</td></tr>
-<tr><td><code>src/tools.rs</code></td><td>Current local tool executor for shell, file read/write/edit, directory listing, search, and glob discovery.</td></tr>
+<tr><td><code>src/tools.rs</code></td><td>Current local tool executor for shell, file read/write/edit, directory listing, search, glob discovery, safe test/build helpers, and runtime policy gates.</td></tr>
+<tr><td><code>src/skill_mcp.rs</code></td><td>Skill registry, selected skill injection, stdio MCP discovery, and MCP tool execution.</td></tr>
 <tr><td><code>src/web.rs</code></td><td>Temporary HTTP/SSE web harness.</td></tr>
 <tr><td><code>src/vscode.rs</code></td><td>Runtime side of the VSCode stdio bridge.</td></tr>
 <tr><td><code>crates/protocol</code></td><td>Runtime-neutral operations, events, ids, user inputs, response items, and rollout records.</td></tr>
 <tr><td><code>crates/session-kernel</code></td><td>Thread lifecycle, submissions, event channels, history, replay, forking, and turn orchestration boundary.</td></tr>
-<tr><td><code>crates/scheduler</code></td><td>Model turn execution against OpenAI-compatible chat completions plus a synthetic scheduler.</td></tr>
+<tr><td><code>crates/scheduler</code></td><td>Model turn execution against OpenAI-compatible chat completions plus a synthetic scheduler used only by tests/dev code.</td></tr>
 <tr><td><code>crates/openai-rs</code></td><td>Reusable OpenAI-compatible HTTP and streaming client.</td></tr>
 <tr><td><code>crates/status</code></td><td>VSCode/codebase status model, deterministic segments, stuckness detection, git state, and context capsules.</td></tr>
+<tr><td><code>crates/pave-router</code></td><td>Rust JSON PAVE vectors, agent profiles, task candidates, and route scoring.</td></tr>
 <tr><td><code>crates/ui-bridge</code></td><td>Adapters from kernel events into CLI, web SSE, and VSCode runtime event shapes.</td></tr>
 <tr><td><code>crates/rollout</code></td><td>JSONL session recording and listing.</td></tr>
-<tr><td><code>crates/thread-store</code></td><td>Storage-neutral thread persistence interface, with local JSONL implementation and remote stub.</td></tr>
+<tr><td><code>crates/thread-store</code></td><td>Storage-neutral thread persistence interface with local JSONL history and sidecar metadata.</td></tr>
 <tr><td><code>crates/state-store</code></td><td>Local JSONL metadata/log shell for future state persistence.</td></tr>
+<tr><td><code>src/autonomy.rs</code></td><td>Autonomous wake-up coordinator, LLM problem segmentation, suggestion cooldowns, and PAVE routing.</td></tr>
 </tbody></table>
 </div>
 <h2 id="reading-path"><a class="header" href="#reading-path">Reading Path</a></h2>

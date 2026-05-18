@@ -220,6 +220,7 @@
 <ul>
 <li><code>NotFound(ThreadId)</code></li>
 <li>IO errors</li>
+<li>JSON metadata errors</li>
 <li>rollout errors</li>
 </ul>
 <p><code>ThreadStoreResult&lt;T&gt;</code> aliases <code>Result&lt;T, ThreadStoreError&gt;</code>.</p>
@@ -261,10 +262,12 @@
 <li>Loads rollout items and extracts response items.</li>
 <li>Lists sessions through <code>rollout::get_threads_in_root</code>.</li>
 <li>Archives by renaming the JSONL file into <code>archived_sessions</code>.</li>
+<li>Persists <code>ThreadMetadata</code> sidecars under <code>thread_metadata/&lt;thread-id&gt;.json</code>.</li>
+<li>Applies <code>ThreadMetadataPatch</code> through <code>update_metadata</code>.</li>
 </ul>
-<p><code>update_metadata</code> currently returns <code>Ok(())</code> without modifying a file.</p>
-<h3 id="remotethreadstore"><a class="header" href="#remotethreadstore">RemoteThreadStore</a></h3>
-<p><code>RemoteThreadStore</code> is a stub. It returns <code>NotFound</code> for thread-specific operations and an empty page for <code>list_threads</code>.</p>
+<p>Stored thread results include the current metadata sidecar, so <code>read_thread</code>, <code>load_history</code>, and <code>list_threads</code> observe metadata updates.</p>
+<h3 id="unavailablethreadstore"><a class="header" href="#unavailablethreadstore">UnavailableThreadStore</a></h3>
+<p><code>UnavailableThreadStore</code> is an explicit erroring implementation for callers that need to wire a <code>ThreadStore</code> trait object before a real backend exists. It returns <code>Unsupported</code> IO errors instead of pretending to be an empty remote store.</p>
 <h3 id="threadrecorder"><a class="header" href="#threadrecorder">ThreadRecorder</a></h3>
 <p><code>ThreadRecorder</code> is a thin append helper around a <code>LocalThreadStore</code> and a fixed <code>ThreadId</code>.</p>
 <h2 id="state-store"><a class="header" href="#state-store">State Store</a></h2>
@@ -313,7 +316,7 @@
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                            <a rel="prev" href="../crates/status.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                            <a rel="prev" href="../crates/pave-router.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <i class="fa fa-angle-left"></i>
                             </a>
 
@@ -327,7 +330,7 @@
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                    <a rel="prev" href="../crates/status.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                    <a rel="prev" href="../crates/pave-router.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <i class="fa fa-angle-left"></i>
                     </a>
 

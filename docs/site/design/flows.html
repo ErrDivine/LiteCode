@@ -216,7 +216,7 @@
   -&gt; append tool results to model messages
   -&gt; repeat until no tool calls or finish_reason == stop
 </code></pre>
-<p>Tool calls are not persisted as <code>ResponseItem::FunctionCall</code> values today. The scheduler emits tool begin/end events and feeds tool results back to the model as chat tool messages. Final assistant text is returned as a <code>ResponseItem::Message</code> and persisted by the kernel.</p>
+<p>Tool calls are persisted as <code>ResponseItem::FunctionCall</code> values followed by <code>ResponseItem::FunctionCallOutput</code> values. The scheduler still emits tool begin/end events for live UI, and later turns replay persisted tool-call history as valid assistant tool-call plus tool-result chat messages.</p>
 <h2 id="persistence-flow"><a class="header" href="#persistence-flow">Persistence Flow</a></h2>
 <pre><code class="language-text">ThreadManager::create_thread
   -&gt; LocalHistoryStore::create_thread_record

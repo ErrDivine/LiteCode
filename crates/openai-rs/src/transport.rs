@@ -80,7 +80,7 @@ impl HttpTransport for ReqwestTransport {
             return Err(TransportError::Http {
                 status,
                 url: Some(url),
-                headers: Some(headers),
+                headers: Some(Box::new(headers)),
                 body,
             });
         }
@@ -102,7 +102,7 @@ impl HttpTransport for ReqwestTransport {
             return Err(TransportError::Http {
                 status,
                 url: Some(url),
-                headers: Some(headers),
+                headers: Some(Box::new(headers)),
                 body,
             });
         }

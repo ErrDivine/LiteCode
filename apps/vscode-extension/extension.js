@@ -17,6 +17,7 @@ function activate(context) {
     vscode.commands.registerCommand('marvis.start', () => controller.start()),
     vscode.commands.registerCommand('marvis.showStatus', () => controller.showStatus()),
     vscode.commands.registerCommand('marvis.refreshStatus', () => controller.refreshStatus()),
+    vscode.commands.registerCommand('marvis.checkAutonomyNow', () => controller.checkAutonomyNow()),
     vscode.commands.registerCommand('marvis.ask', () => controller.ask()),
     vscode.commands.registerCommand('marvis.askAboutSelection', () => controller.askAboutSelection()),
     vscode.commands.registerCommand('marvis.fixNearCursor', () => controller.fixNearCursor()),
@@ -52,19 +53,33 @@ class MarvisController {
     this.panel = undefined;
     this.lastReport = undefined;
     this.lastStatus = undefined;
+    this.lastAutonomyDecision = undefined;
+    this.activeSuggestion = undefined;
     this.statusTimer = undefined;
+    this.autonomyTimer = undefined;
+    this.heartbeatTimer = undefined;
+    this.autonomyInFlight = false;
     this.recentlyOpened = [];
     this.recentlySaved = [];
     this.commandResults = [];
     this.runningTasks = new Map();
     this.debugSessions = new Map();
     this.agentLog = [];
+    this.processes = new Map();
   }
 
   dispose() {
     if (this.statusTimer) {
       clearTimeout(this.statusTimer);
       this.statusTimer = undefined;
+    }
+    if (this.autonomyTimer) {
+      clearTimeout(this.autonomyTimer);
+      this.autonomyTimer = undefined;
+    }
+    if (this.heartbeatTimer) {
+      clearInterval(this.heartbeatTimer);
+      this.heartbeatTimer = undefined;
     }
     if (this.client) {
       this.client.dispose();
@@ -82,22 +97,22 @@ class MarvisController {
         if (editor && editor.document.uri.scheme === 'file') {
           this.addRecent(this.recentlyOpened, editor.document.uri.fsPath);
         }
-        this.scheduleStatusRefresh('active editor changed');
+        this.scheduleStatusRefresh('active editor changed', 'status_change');
       }),
       vscode.window.onDidChangeTextEditorSelection(() =>
-        this.scheduleStatusRefresh('selection changed')
+        this.scheduleStatusRefresh('selection changed', 'idle')
       ),
       vscode.window.onDidChangeVisibleTextEditors(() =>
-        this.scheduleStatusRefresh('visible editors changed')
+        this.scheduleStatusRefresh('visible editors changed', 'status_change')
       ),
       vscode.languages.onDidChangeDiagnostics(() =>
-        this.scheduleStatusRefresh('diagnostics changed')
+        this.scheduleStatusRefresh('diagnostics changed', 'diagnostics_changed')
       ),
       vscode.workspace.onDidSaveTextDocument((document) => {
         if (document.uri.scheme === 'file') {
           this.addRecent(this.recentlySaved, document.uri.fsPath);
         }
-        this.scheduleStatusRefresh('file saved');
+        this.scheduleStatusRefresh('file saved', 'file_saved');
       }),
       vscode.tasks.onDidStartTask((event) => {
         const name = event.execution.task.name;
@@ -106,7 +121,7 @@ class MarvisController {
           kind: taskKind(event.execution.task),
           is_running: true
         });
-        this.scheduleStatusRefresh('task started');
+        this.scheduleStatusRefresh('task started', 'status_change');
       }),
       vscode.tasks.onDidEndTaskProcess((event) => {
         const name = event.execution.task.name;
@@ -124,7 +139,7 @@ class MarvisController {
           exit_code: typeof event.exitCode === 'number' ? event.exitCode : undefined,
           timestamp_ms: Date.now()
         });
-        this.scheduleStatusRefresh('task ended');
+        this.scheduleStatusRefresh('task ended', 'task_ended');
       }),
       vscode.debug.onDidStartDebugSession((session) => {
         this.debugSessions.set(session.id, {
@@ -132,7 +147,7 @@ class MarvisController {
           kind: session.type,
           state: 'running'
         });
-        this.scheduleStatusRefresh('debug session started');
+        this.scheduleStatusRefresh('debug session started', 'status_change');
       }),
       vscode.debug.onDidTerminateDebugSession((session) => {
         this.debugSessions.set(session.id, {
@@ -140,14 +155,47 @@ class MarvisController {
           kind: session.type,
           state: 'terminated'
         });
-        this.scheduleStatusRefresh('debug session terminated');
+        this.scheduleStatusRefresh('debug session terminated', 'debug_terminated');
       })
     );
+    if (typeof vscode.window.onDidEndTerminalShellExecution === 'function') {
+      this.context.subscriptions.push(
+        vscode.window.onDidEndTerminalShellExecution(async (event) => {
+          const execution = event.execution;
+          const commandLine = execution && execution.commandLine;
+          const command = commandLine && (commandLine.value || commandLine);
+          if (!command) {
+            return;
+          }
+          let output = '';
+          if (typeof execution.read === 'function') {
+            try {
+              for await (const chunk of execution.read()) {
+                output += String(chunk);
+                if (output.length > 20000) {
+                  output = truncateTail(output, 12000);
+                }
+              }
+            } catch (error) {
+              output += `\nUnable to read terminal output: ${error.message}`;
+            }
+          }
+          await this.sendCommandResult({
+            command: String(command),
+            cwd: this.workspaceRoot(),
+            output_tail: truncateTail(output || 'Terminal command ended.', 12000),
+            exit_code: typeof event.exitCode === 'number' ? event.exitCode : undefined,
+            timestamp_ms: Date.now()
+          });
+        })
+      );
+    }
   }
 
   async start() {
     await this.ensureClient();
     await this.refreshStatus();
+    this.scheduleAutonomyTick('manual');
     this.showStatus();
   }
 
@@ -183,6 +231,150 @@ class MarvisController {
       this.lastReport = response.report;
       this.updatePanel();
     }
+    this.scheduleAutonomyTick('command_result');
+  }
+
+  async checkAutonomyNow() {
+    await this.ensureClient();
+    await this.runAutonomyTick('manual');
+  }
+
+  startAutonomyHeartbeat() {
+    const config = vscode.workspace.getConfiguration('marvis');
+    if (!config.get('autonomy.enabled')) {
+      if (this.heartbeatTimer) {
+        clearInterval(this.heartbeatTimer);
+        this.heartbeatTimer = undefined;
+      }
+      return;
+    }
+    if (this.heartbeatTimer) {
+      clearInterval(this.heartbeatTimer);
+    }
+    const interval = Math.max(5000, Number(config.get('autonomy.heartbeatIntervalMs') || 30000));
+    this.heartbeatTimer = setInterval(() => {
+      this.runAutonomyTick('heartbeat').catch((error) => {
+        this.output.appendLine(`autonomy heartbeat failed: ${error.message}`);
+      });
+    }, interval);
+  }
+
+  scheduleAutonomyTick(trigger) {
+    const config = vscode.workspace.getConfiguration('marvis');
+    if (!config.get('autonomy.enabled')) {
+      return;
+    }
+    if (!this.client || !this.client.isRunning() || this.hasRunningProcess()) {
+      return;
+    }
+    if (this.autonomyTimer) {
+      clearTimeout(this.autonomyTimer);
+    }
+    const delay = Math.max(500, Number(config.get('autonomy.idleDelayMs') || 3000));
+    this.autonomyTimer = setTimeout(() => {
+      this.autonomyTimer = undefined;
+      this.runAutonomyTick(trigger || 'idle').catch((error) => {
+        this.output.appendLine(`autonomy tick failed: ${error.message}`);
+      });
+    }, delay);
+  }
+
+  async runAutonomyTick(trigger) {
+    const config = vscode.workspace.getConfiguration('marvis');
+    if (!config.get('autonomy.enabled') && trigger !== 'manual') {
+      return;
+    }
+    if (!this.client || !this.client.isRunning() || this.autonomyInFlight || this.hasRunningProcess()) {
+      return;
+    }
+    this.autonomyInFlight = true;
+    try {
+      const status = await this.collectStatus();
+      this.lastStatus = status;
+      await this.client.request(
+        'autonomy_tick',
+        { status, trigger, agent_profiles: this.agentProfiles() },
+        ['autonomy_decision', 'error'],
+        120000
+      );
+    } finally {
+      this.autonomyInFlight = false;
+    }
+  }
+
+  handleAutonomyDecision(decision) {
+    if (!decision) {
+      return;
+    }
+    this.lastAutonomyDecision = decision;
+    if (decision.type === 'suggest' && decision.suggestion) {
+      this.activeSuggestion = decision.suggestion;
+      const route = decision.suggestion.route || {};
+      const task = route.task || {};
+      const agent = route.agent || {};
+      this.addLog('suggestion', `${task.title || 'Suggested task'} -> ${agent.label || agent.id || 'agent'}`);
+      this.showSuggestionNotification(decision.suggestion);
+    } else if (decision.type === 'suppressed') {
+      this.activeSuggestion = undefined;
+    }
+    this.updatePanel();
+  }
+
+  async showSuggestionNotification(suggestion) {
+    const route = suggestion.route || {};
+    const task = route.task || {};
+    const agent = route.agent || {};
+    const title = task.title || 'Marvis found a possible task';
+    const score = typeof route.final_score === 'number' ? route.final_score.toFixed(2) : 'n/a';
+    const choice = await vscode.window.showInformationMessage(
+      `${title} (${agent.label || agent.id || 'agent'}, score ${score}, ${approvalLabel(suggestion.required_approval)})`,
+      'Accept',
+      'Dismiss'
+    );
+    if (choice === 'Accept') {
+      await this.runSuggestedTask(suggestion.suggestion_id);
+    } else if (choice === 'Dismiss') {
+      await this.dismissSuggestion(suggestion.suggestion_id);
+    }
+  }
+
+  async runSuggestedTask(suggestionId) {
+    const suggestion = this.activeSuggestion && this.activeSuggestion.suggestion_id === suggestionId
+      ? this.activeSuggestion
+      : undefined;
+    const approval = suggestion ? suggestion.required_approval : readOnlyApproval();
+    await this.ensureClient();
+    await this.showStatus();
+    try {
+      await this.client.request(
+        'run_suggested_task',
+        { suggestion_id: suggestionId, approval },
+        ['complete', 'error'],
+        20 * 60 * 1000
+      );
+      this.activeSuggestion = undefined;
+      this.updatePanel();
+    } catch (error) {
+      this.addLog('error', error.message);
+      vscode.window.showErrorMessage(`Marvis failed: ${error.message}`);
+    }
+  }
+
+  async dismissSuggestion(suggestionId) {
+    if (!suggestionId) {
+      return;
+    }
+    await this.ensureClient();
+    try {
+      await this.client.request(
+        'dismiss_suggestion',
+        { suggestion_id: suggestionId },
+        ['autonomy_decision', 'error'],
+        30000
+      );
+    } catch (error) {
+      this.addLog('error', error.message);
+    }
   }
 
   async ask() {
@@ -193,7 +385,11 @@ class MarvisController {
     if (!prompt) {
       return;
     }
-    await this.runPrompt(prompt);
+    const approval = await this.pickApproval('Ask Marvis');
+    if (!approval) {
+      return;
+    }
+    await this.runPrompt(prompt, approval);
   }
 
   async askAboutSelection() {
@@ -202,7 +398,7 @@ class MarvisController {
     const prompt = selectionText
       ? `Explain this selected code and point out risks or likely next edits:\n\n${truncate(selectionText, 4000)}`
       : 'Explain the code near my cursor and how it fits the current file.';
-    await this.runPrompt(prompt);
+    await this.runPrompt(prompt, readOnlyApproval());
   }
 
   async fixNearCursor() {
@@ -215,7 +411,8 @@ class MarvisController {
       return;
     }
     await this.runPrompt(
-      'Fix the issue near my cursor. Use the active editor, cursor bubble, diagnostics, terminal/task failures, and git state. Keep the patch small and run targeted verification if possible.'
+      'Fix the issue near my cursor. Use the active editor, cursor bubble, diagnostics, terminal/task failures, and git state. Keep the patch small and run targeted verification if possible.',
+      patchApproval()
     );
   }
 
@@ -236,8 +433,13 @@ class MarvisController {
       return;
     }
     const file = targetUri && targetUri.fsPath ? targetUri.fsPath : 'current file';
+    const approval = await this.pickApproval('Explain Diagnostic');
+    if (!approval) {
+      return;
+    }
     await this.runPrompt(
-      `Explain this diagnostic and propose the smallest safe fix.\nFile: ${file}\nMessage: ${targetDiagnostic.message}\nRange: ${rangeLabel(targetDiagnostic.range)}`
+      `Explain this diagnostic and propose the smallest safe fix.\nFile: ${file}\nMessage: ${targetDiagnostic.message}\nRange: ${rangeLabel(targetDiagnostic.range)}`,
+      approval
     );
   }
 
@@ -308,7 +510,7 @@ class MarvisController {
     });
   }
 
-  async runPrompt(prompt) {
+  async runPrompt(prompt, approval) {
     await this.ensureClient();
     await this.showStatus();
     this.addLog('user', prompt);
@@ -318,7 +520,7 @@ class MarvisController {
     try {
       await this.client.request(
         'user_prompt',
-        { prompt, status },
+        { prompt, status, approval: approval || readOnlyApproval() },
         ['complete', 'error'],
         20 * 60 * 1000
       );
@@ -334,7 +536,7 @@ class MarvisController {
       this.commandResults.shift();
     }
     if (!this.client || !this.client.isRunning()) {
-      this.scheduleStatusRefresh('command result recorded');
+      this.scheduleStatusRefresh('command result recorded', 'command_result');
       return;
     }
     const response = await this.client.request(
@@ -364,7 +566,9 @@ class MarvisController {
       {
         workspace_root: this.workspaceRoot(),
         model: config.get('model'),
-        max_tokens: config.get('maxTokens')
+        base_url: String(config.get('baseUrl') || '') || undefined,
+        max_tokens: config.get('maxTokens'),
+        agent_profiles: this.agentProfiles()
       },
       ['ready', 'error'],
       120000
@@ -372,11 +576,7 @@ class MarvisController {
     if (response.report) {
       this.lastReport = response.report;
     }
-    if (response.using_synthetic_model) {
-      vscode.window.showWarningMessage(
-        'OPENROUTER_API_KEY is not set. Marvis status still works, but model replies use the synthetic dev scheduler.'
-      );
-    }
+    this.startAutonomyHeartbeat();
     this.updatePanel();
   }
 
@@ -390,6 +590,15 @@ class MarvisController {
     }
     if (message.type === 'agent_event') {
       this.handleAgentEvent(message.event);
+      return;
+    }
+    if (message.type === 'process_update' && message.process) {
+      this.processes.set(message.process.process_id, message.process);
+      this.updatePanel();
+      return;
+    }
+    if (message.type === 'autonomy_decision') {
+      this.handleAutonomyDecision(message.decision);
       return;
     }
     if (message.type === 'error') {
@@ -484,7 +693,7 @@ class MarvisController {
     };
   }
 
-  scheduleStatusRefresh(_reason) {
+  scheduleStatusRefresh(_reason, autonomyTrigger) {
     if (!this.client || !this.client.isRunning()) {
       return;
     }
@@ -496,6 +705,7 @@ class MarvisController {
       this.refreshStatus().catch((error) => {
         this.output.appendLine(`status refresh failed: ${error.message}`);
       });
+      this.scheduleAutonomyTick(autonomyTrigger || 'status_change');
     }, 500);
   }
 
@@ -572,8 +782,50 @@ class MarvisController {
       type: 'state',
       report: this.lastReport,
       status: this.lastStatus,
-      log: this.agentLog
+      log: this.agentLog,
+      processes: Array.from(this.processes.values()).slice(-20),
+      autonomyDecision: this.lastAutonomyDecision,
+      suggestion: this.activeSuggestion
     });
+  }
+
+  hasRunningProcess() {
+    return Array.from(this.processes.values()).some((process) =>
+      ['created', 'running_model_turn', 'running_tool_call'].includes(process.state)
+    );
+  }
+
+  agentProfiles() {
+    const config = vscode.workspace.getConfiguration('marvis');
+    const raw = config.get('agentProfiles') || [];
+    if (!Array.isArray(raw)) {
+      return [];
+    }
+    return raw.map(normalizeAgentProfile).filter(Boolean);
+  }
+
+  async pickApproval(title) {
+    const picked = await vscode.window.showQuickPick(
+      [
+        {
+          label: 'Read only',
+          description: 'Use editor status and read/search tools only.',
+          approval: readOnlyApproval()
+        },
+        {
+          label: 'Patch and checks',
+          description: 'Allow workspace edits and safe local check/test commands.',
+          approval: patchApproval()
+        },
+        {
+          label: 'Risky shell',
+          description: 'Allow broader shell/git/network-like commands for this prompt.',
+          approval: riskyApproval()
+        }
+      ],
+      { title }
+    );
+    return picked && picked.approval;
   }
 
   async handlePanelMessage(message) {
@@ -589,6 +841,15 @@ class MarvisController {
         break;
       case 'recordFailure':
         await this.recordTerminalFailure();
+        break;
+      case 'acceptSuggestion':
+        await this.runSuggestedTask(message.suggestionId);
+        break;
+      case 'dismissSuggestion':
+        await this.dismissSuggestion(message.suggestionId);
+        break;
+      case 'checkAutonomy':
+        await this.checkAutonomyNow();
         break;
       default:
         break;
@@ -741,6 +1002,7 @@ class MarvisCodeActionProvider {
 function resolveRuntime(context, workspaceRoot) {
   const config = vscode.workspace.getConfiguration('marvis');
   const configured = String(config.get('runtimePath') || '').trim();
+  const binaryName = process.platform === 'win32' ? 'lite-code.exe' : 'lite-code';
   if (configured) {
     return {
       command: configured,
@@ -749,10 +1011,23 @@ function resolveRuntime(context, workspaceRoot) {
     };
   }
 
+  const packagedCandidates = [
+    context.asAbsolutePath(path.join('bin', `${process.platform}-${process.arch}`, binaryName)),
+    context.asAbsolutePath(path.join('bin', binaryName))
+  ];
+  for (const candidate of packagedCandidates) {
+    if (fs.existsSync(candidate)) {
+      return {
+        command: candidate,
+        args: ['--vscode-stdio'],
+        cwd: workspaceRoot
+      };
+    }
+  }
+
   const runtimeRoot = path.resolve(context.extensionPath, '..', '..');
-  const binaryName = process.platform === 'win32' ? 'lite-code.exe' : 'lite-code';
   const debugBinary = path.join(runtimeRoot, 'target', 'debug', binaryName);
-  if (fs.existsSync(debugBinary)) {
+  if (context.extensionMode === vscode.ExtensionMode.Development && fs.existsSync(debugBinary)) {
     return {
       command: debugBinary,
       args: ['--vscode-stdio'],
@@ -760,11 +1035,9 @@ function resolveRuntime(context, workspaceRoot) {
     };
   }
 
-  return {
-    command: 'cargo',
-    args: ['run', '--quiet', '--', '--vscode-stdio'],
-    cwd: runtimeRoot
-  };
+  throw new Error(
+    'Marvis runtime binary was not found. Set marvis.runtimePath to a built lite-code binary or install an extension package that includes bin/lite-code.'
+  );
 }
 
 function collectOpenEditors() {
@@ -875,6 +1148,107 @@ function severity(value) {
     default:
       return 'unknown';
   }
+}
+
+function readOnlyApproval() {
+  return {
+    allow_workspace_write: false,
+    allow_shell: false,
+    allow_risky_shell: false,
+    allow_git_write: false,
+    allow_network: false
+  };
+}
+
+function patchApproval() {
+  return {
+    allow_workspace_write: true,
+    allow_shell: true,
+    allow_risky_shell: false,
+    allow_git_write: false,
+    allow_network: false
+  };
+}
+
+function riskyApproval() {
+  return {
+    allow_workspace_write: true,
+    allow_shell: true,
+    allow_risky_shell: true,
+    allow_git_write: true,
+    allow_network: true
+  };
+}
+
+function normalizeAgentProfile(raw) {
+  if (!raw || typeof raw !== 'object') {
+    return undefined;
+  }
+  const id = String(raw.id || '').trim();
+  const label = String(raw.label || id).trim();
+  const model = String(raw.model || vscode.workspace.getConfiguration('marvis').get('model') || '').trim();
+  const skillPrompt = String(raw.skill_prompt || raw.skillPrompt || '').trim();
+  const skills = Array.isArray(raw.skills) ? raw.skills.map(String).map((value) => value.trim()).filter(Boolean) : [];
+  const mcpServers = Array.isArray(raw.mcp_servers || raw.mcpServers)
+    ? (raw.mcp_servers || raw.mcpServers).map(String).map((value) => value.trim()).filter(Boolean)
+    : [];
+  if (!id || !label || !model || (!skillPrompt && skills.length === 0)) {
+    return undefined;
+  }
+  return {
+    id,
+    label,
+    model,
+    skills,
+    mcp_servers: mcpServers,
+    skill_prompt: skillPrompt,
+    tool_allowlist: Array.isArray(raw.tool_allowlist || raw.toolAllowlist)
+      ? (raw.tool_allowlist || raw.toolAllowlist).map(String)
+      : [],
+    pave: normalizePave(raw.pave),
+    default_approval: normalizeApproval(raw.default_approval || raw.defaultApproval)
+  };
+}
+
+function normalizePave(value) {
+  if (!value || typeof value !== 'object') {
+    return {};
+  }
+  const result = {};
+  for (const [key, raw] of Object.entries(value)) {
+    const number = Number(raw);
+    if (Number.isFinite(number)) {
+      result[key] = number;
+    }
+  }
+  return result;
+}
+
+function normalizeApproval(value) {
+  if (!value || typeof value !== 'object') {
+    return readOnlyApproval();
+  }
+  return {
+    allow_workspace_write: Boolean(value.allow_workspace_write),
+    allow_shell: Boolean(value.allow_shell),
+    allow_risky_shell: Boolean(value.allow_risky_shell),
+    allow_git_write: Boolean(value.allow_git_write),
+    allow_network: Boolean(value.allow_network)
+  };
+}
+
+function approvalLabel(approval) {
+  const value = approval || readOnlyApproval();
+  if (value.allow_risky_shell || value.allow_git_write || value.allow_network) {
+    return 'risky shell';
+  }
+  if (value.allow_workspace_write) {
+    return value.allow_shell ? 'patch and checks' : 'workspace write';
+  }
+  if (value.allow_shell) {
+    return 'read plus safe shell';
+  }
+  return 'read only';
 }
 
 function selectedText(editor) {
@@ -1006,6 +1380,7 @@ function renderPanelHtml() {
   <div class="toolbar">
     <button id="ask">Ask</button>
     <button class="secondary" id="refresh">Refresh</button>
+    <button class="secondary" id="checkAutonomy">Check</button>
     <button class="secondary" id="runCommand">Run Command</button>
     <button class="secondary" id="recordFailure">Record Failure</button>
   </div>
@@ -1023,6 +1398,10 @@ function renderPanelHtml() {
       <div id="suggestion" class="summary">No suggestion yet.</div>
     </section>
     <section>
+      <h2>Processes</h2>
+      <div id="processes"></div>
+    </section>
+    <section>
       <h2>Trace</h2>
       <div id="log" class="log"></div>
     </section>
@@ -1032,9 +1411,11 @@ function renderPanelHtml() {
     const summary = document.getElementById('summary');
     const segments = document.getElementById('segments');
     const suggestion = document.getElementById('suggestion');
+    const processes = document.getElementById('processes');
     const log = document.getElementById('log');
     document.getElementById('ask').addEventListener('click', () => vscode.postMessage({ command: 'ask' }));
     document.getElementById('refresh').addEventListener('click', () => vscode.postMessage({ command: 'refresh' }));
+    document.getElementById('checkAutonomy').addEventListener('click', () => vscode.postMessage({ command: 'checkAutonomy' }));
     document.getElementById('runCommand').addEventListener('click', () => vscode.postMessage({ command: 'runCommand' }));
     document.getElementById('recordFailure').addEventListener('click', () => vscode.postMessage({ command: 'recordFailure' }));
     window.addEventListener('message', (event) => render(event.data));
@@ -1057,7 +1438,40 @@ function renderPanelHtml() {
           '<div class="meta">risk=' + escapeHtml(segment.risk_level) + ' confidence=' + escapeHtml(segment.confidence) +
           ' files=' + escapeHtml(files || 'none') + '</div></div>';
       }).join('') || '<div class="meta">No active segments.</div>';
-      suggestion.textContent = report.suggestion ? report.suggestion.message : 'No suggestion yet.';
+      if (state.suggestion) {
+        const route = state.suggestion.route || {};
+        const task = route.task || {};
+        const agent = route.agent || {};
+        const evidence = (task.evidence || []).slice(0, 4).join('; ');
+        suggestion.innerHTML = '<div><strong>' + escapeHtml(task.title || 'Suggested task') + '</strong></div>' +
+          '<div>' + escapeHtml(task.prompt || '') + '</div>' +
+          '<div class="meta">agent=' + escapeHtml(agent.label || agent.id || 'unknown') +
+          ' score=' + escapeHtml(route.final_score) + ' risk=' + escapeHtml(task.risk_level) +
+          ' approval=' + escapeHtml(approvalLabel(state.suggestion.required_approval)) + '</div>' +
+          '<div class="meta">' + escapeHtml(evidence || 'No evidence listed.') + '</div>' +
+          '<div style="display:flex;gap:6px;margin-top:8px">' +
+          '<button id="acceptSuggestion">Accept</button>' +
+          '<button class="secondary" id="dismissSuggestion">Dismiss</button></div>';
+        document.getElementById('acceptSuggestion').addEventListener('click', () =>
+          vscode.postMessage({ command: 'acceptSuggestion', suggestionId: state.suggestion.suggestion_id })
+        );
+        document.getElementById('dismissSuggestion').addEventListener('click', () =>
+          vscode.postMessage({ command: 'dismissSuggestion', suggestionId: state.suggestion.suggestion_id })
+        );
+      } else if (state.autonomyDecision && state.autonomyDecision.type === 'idle') {
+        suggestion.textContent = 'Idle: ' + (state.autonomyDecision.reason || 'no action');
+      } else if (state.autonomyDecision && state.autonomyDecision.type === 'suppressed') {
+        suggestion.textContent = 'Suppressed: ' + (state.autonomyDecision.reason || 'dismissed');
+      } else {
+        suggestion.textContent = report.suggestion ? report.suggestion.message : 'No suggestion yet.';
+      }
+      processes.innerHTML = (state.processes || []).map((process) => {
+        return '<div class="segment"><div><strong>' + escapeHtml(process.process_id) + '</strong> ' +
+          escapeHtml(process.state) + '</div><div>' + escapeHtml(process.prompt_preview) + '</div>' +
+          '<div class="meta">tools=' + escapeHtml(process.tool_calls_used) + '/' + escapeHtml(process.max_tool_calls) +
+          ' write=' + escapeHtml(process.allow_workspace_write) + ' risky=' + escapeHtml(process.allow_risky_shell) +
+          '</div></div>';
+      }).join('') || '<div class="meta">No process events yet.</div>';
       log.innerHTML = (state.log || []).map((row) => {
         return '<div class="log-row"><div class="kind">' + escapeHtml(row.kind) + ' ' + escapeHtml(row.at) +
           '</div><div>' + escapeHtml(row.text) + '</div></div>';

@@ -82,7 +82,7 @@ TurnRequest
   -> repeat until no tool calls or finish_reason == stop
 ```
 
-Tool calls are not persisted as `ResponseItem::FunctionCall` values today. The scheduler emits tool begin/end events and feeds tool results back to the model as chat tool messages. Final assistant text is returned as a `ResponseItem::Message` and persisted by the kernel.
+Tool calls are persisted as `ResponseItem::FunctionCall` values followed by `ResponseItem::FunctionCallOutput` values. The scheduler still emits tool begin/end events for live UI, and later turns replay persisted tool-call history as valid assistant tool-call plus tool-result chat messages.
 
 ## Persistence Flow
 

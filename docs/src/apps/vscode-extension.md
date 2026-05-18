@@ -17,6 +17,7 @@ The extension contributes:
 - `Marvis: Start Marvis`
 - `Marvis: Show Status`
 - `Marvis: Refresh Status`
+- `Marvis: Check Autonomy Now`
 - `Marvis: Ask Marvis`
 - `Marvis: Ask About Selection`
 - `Marvis: Fix Near Cursor`
@@ -34,8 +35,13 @@ Settings:
 | Setting | Default | Meaning |
 | --- | --- | --- |
 | `marvis.runtimePath` | empty | Optional path to the `lite-code` binary. |
-| `marvis.model` | `nvidia/nemotron-3-super-120b-a12b:free` | Model passed to the Rust runtime. |
+| `marvis.model` | `gpt-4.1-mini` | Model passed to the Rust runtime. |
+| `marvis.baseUrl` | empty | Optional OpenAI-compatible base URL. Empty means use `MARVIS_BASE_URL` or `https://api.openai.com/v1`. |
 | `marvis.maxTokens` | `4096` | Maximum response tokens per model turn. |
+| `marvis.autonomy.enabled` | `true` | Enables suggest-first autonomous status checks. |
+| `marvis.autonomy.idleDelayMs` | `3000` | Debounce delay before a quiet status check. |
+| `marvis.autonomy.heartbeatIntervalMs` | `30000` | Low-frequency heartbeat interval while the runtime is active. |
+| `marvis.agentProfiles` | built-in Rust/test/explainer profiles | Agent model names, skill ids, MCP server ids, tool allowlists, approval defaults, and PAVE vectors. |
 
 ## Activation
 
@@ -60,12 +66,16 @@ State:
 - status webview panel
 - last status report
 - last raw status
+- last autonomy decision
+- active suggestion
 - debounce timer
+- autonomy debounce and heartbeat timers
 - recent opened/saved files
 - command results
 - running task map
 - debug session map
 - agent log
+- process map
 
 Major methods:
 
@@ -75,6 +85,7 @@ Major methods:
 | `start` | Ensures runtime, refreshes status, and shows the panel. |
 | `showStatus` | Creates or reveals the webview panel. |
 | `refreshStatus` | Collects status and sends `status_update`. |
+| `checkAutonomyNow` | Sends a manual `autonomy_tick`. |
 | `ask` | Prompts the user for a request. |
 | `askAboutSelection` | Builds a prompt around selected code or cursor context. |
 | `fixNearCursor` | Confirms and asks Marvis to inspect and fix nearby issues. |
@@ -84,6 +95,9 @@ Major methods:
 | `runTaskAndRecord` | Runs a VSCode task and records exit status. |
 | `runPrompt` | Sends `user_prompt` with current status and handles streamed events. |
 | `sendCommandResult` | Sends command result to runtime if available. |
+| `runAutonomyTick` | Sends debounced or heartbeat status for autonomous LLM segmentation and routing. |
+| `runSuggestedTask` | Accepts a suggestion and runs it through the normal bounded process path. |
+| `dismissSuggestion` | Suppresses a suggestion through the runtime cooldown. |
 | `ensureClient` | Starts and initializes the Rust runtime. |
 | `collectStatus` | Builds the `VscodeStatus` JSON payload. |
 | `scheduleStatusRefresh` | Debounces status refresh after workspace changes. |
@@ -138,16 +152,19 @@ Helpers:
 - `truncate`
 - `truncateTail`
 
-`collectStatus` sends active editor, open editors, visible ranges, selections, cursor bubble, recent files, diagnostics, terminal-like command results, running tasks, debug sessions, trust state, remote name, and VSCode app/profile name.
+`collectStatus` sends active editor, open editors, visible ranges, selections, cursor bubble, recent files, diagnostics, terminal-like command results, running tasks, debug sessions, trust state, remote name, and VSCode app/profile name. When VSCode exposes shell-integration events, Marvis also records completed terminal shell executions and their output tail.
+
+Autonomy ticks are sent after diagnostics, saves, command/task results, debug termination, quiet editor changes, and the heartbeat. The extension does not start tool execution from a tick; it displays the returned suggestion and sends `run_suggested_task` only after acceptance.
 
 ## Webview Panel
 
 `renderPanelHtml()` returns a self-contained HTML document with:
 
-- toolbar buttons for ask, refresh, run command, record failure
+- toolbar buttons for ask, refresh, manual autonomy check, run command, record failure
 - status summary section
 - active segments section
-- suggestion section
+- suggestion section with accept/dismiss controls
+- process section
 - trace log section
 
 The panel uses VSCode theme variables and receives state through `postMessage`.
@@ -157,8 +174,10 @@ The panel uses VSCode theme variables and receives state through `postMessage`.
 `resolveRuntime(context, workspaceRoot)` chooses:
 
 1. Configured `marvis.runtimePath` with `--vscode-stdio`.
-2. `target/debug/lite-code` from the repo root.
-3. `cargo run --quiet -- --vscode-stdio` from the repo root.
+2. Packaged binaries under `bin/<platform>-<arch>/lite-code` or `bin/lite-code`.
+3. `target/debug/lite-code` from the repo root, only in VSCode extension development mode.
+
+If none of those exists, the extension returns a configuration error instead of invoking `cargo run`.
 
 ## Design Notes
 

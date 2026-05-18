@@ -541,7 +541,7 @@ pub enum ProcessState {
 ```rust
 pub struct ExecutionRoute {
     pub model: ModelId,
-    pub fallback_models: Vec<ModelId>,
+    pub alternate_models: Vec<ModelId>,
     pub skills: Vec<SkillId>,
     pub mcp_servers: Vec<McpServerId>,
     pub planner_mode: PlannerMode,
@@ -1478,54 +1478,54 @@ Minimum rules:
 
 ### 13.5 MCP Config Example
 
-```toml
-# .marvis/mcp.toml
+Current Marvis reads JSON config from `.marvis/mcp.json` or `.mcp.json`:
 
-[[servers]]
-id = "local-docs"
-command = "uvx"
-args = ["mcp-server-docs"]
-enabled = true
-
-[servers.permissions]
-read_workspace = true
-write_workspace = false
-network = false
-shell = false
-secrets = false
-
-[[servers]]
-id = "github"
-command = "npx"
-args = ["-y", "@modelcontextprotocol/server-github"]
-enabled = false
-
-[servers.permissions]
-read_workspace = false
-write_workspace = false
-network = true
-shell = false
-secrets = false
+```json
+{
+  "mcpServers": {
+    "local-docs": {
+      "transport": "stdio",
+      "command": "uvx",
+      "args": ["mcp-server-docs"],
+      "enabled": true,
+      "enabled_tools": []
+    }
+  }
+}
 ```
 
 ### 13.6 Skill Registry
 
 The skill registry should unify built-in skills, local repo skills, and MCP-backed skills.
 
-```toml
-# .marvis/skills/rust_debugger.toml
+Current Marvis supports Codex-style skill bodies under `.marvis/skills/**/SKILL.md` and `.agents/skills/**/SKILL.md`:
 
-id = "rust-debugger"
-name = "Rust Debugger"
-domains = ["rust", "diagnostics", "tests"]
-capabilities = ["read_file", "run_test", "apply_patch"]
-risk_level = "medium"
+```markdown
+---
+name: Rust Debugger
+description: Repair Rust diagnostics with focused verified patches.
+---
 
-[input]
-requires = ["diagnostics", "failing_tests", "relevant_files"]
+Use compiler diagnostics, read nearby code first, apply the smallest patch, and verify with `run_build` or `run_test`.
+```
 
-[output]
-produces = ["patch", "explanation", "verification_plan"]
+Optional tool capability and MCP dependency metadata lives beside the skill at `agents/openai.json` or `agents/openai.yaml`:
+
+```json
+{
+  "capabilities": ["read_file", "search_files", "apply_patch", "run_build"],
+  "dependencies": {
+    "tools": [
+      {
+        "type": "mcp",
+        "value": "local-docs",
+        "transport": "stdio",
+        "command": "uvx",
+        "args": ["mcp-server-docs"]
+      }
+    ]
+  }
+}
 ```
 
 ---
@@ -2134,6 +2134,11 @@ These are not calendar phases. They are buildable vertical slices for vibe codin
 - One VSCode-triggered turn, or a temporary CLI/web harness turn, leaves enough trace data to see what happened.
 - A test can replay event order without calling a model.
 
+#### Current Implementation Notes
+
+- `session-kernel` now persists turn, user, agent, and tool events into rollout JSONL as `RolloutItem::EventMsg`.
+- The root binary includes `--print-trace <path>` to print a replayable rollout trace summary.
+
 ---
 
 ### Slice 2 — VSCode Status Store From Real Repo Signals
@@ -2214,7 +2219,7 @@ Create the segment registry and invalidation rules.
   - tool/permission constraints.
 - Add token budget estimates.
 - Add compact turn summaries after each turn.
-- Keep OpenRouter/OpenAI execution in `scheduler`.
+- Keep OpenAI-compatible model execution in `scheduler`.
 
 #### Deliverables
 
@@ -2254,6 +2259,11 @@ Create the segment registry and invalidation rules.
 - An explicit user request creates a task/process behind the existing thread API.
 - Budget and cancellation are tested.
 
+#### Current Implementation Notes
+
+- VSCode prompts now emit `ProcessUpdate` events with process id, state, model, tool budget, tool count, and per-turn permissions.
+- `SessionConfig` and `TurnRequest` now carry `max_tool_calls`, and `scheduler` stops when the budget is exceeded.
+
 ---
 
 ### Slice 6 — Tool Gateway and Safe Edit Loop
@@ -2268,7 +2278,7 @@ Create the segment registry and invalidation rules.
 - Add targeted `run_test`, `run_build`, and `run_formatter` helpers.
 - Add command timeouts.
 - Add verification summaries.
-- Add rollback strategy using git diff snapshots before writes.
+- Add rollback strategy using preimage snapshots before writes.
 
 #### Deliverables
 
@@ -2279,6 +2289,14 @@ Create the segment registry and invalidation rules.
 
 - Marvis can make a small patch, run the targeted check, and summarize the verified diff.
 - Risky commands require confirmation or are blocked.
+
+#### Current Implementation Notes
+
+- `LocalToolExecutor` now takes a `ToolPolicy`.
+- Tool schemas are filtered by policy before the model sees them.
+- Tool execution still checks policy at runtime for writes, shell, git write commands, network-like commands, unsafe paths, and command timeouts.
+- Added `apply_patch`, `run_test`, `run_build`, `run_formatter`, `git_status`, and `git_diff`.
+- Write tools now create rollback preimage snapshots under `.marvis/rollback` before mutation, and expose `list_rollbacks` plus `restore_rollback` for recovery.
 
 ---
 
@@ -2304,6 +2322,13 @@ Create the segment registry and invalidation rules.
 - Repeated `cargo test` failure creates a specific suggestion.
 - Marvis does not auto-edit from stuckness alone.
 
+#### Current Implementation Notes
+
+- VSCode now sends debounced and heartbeat `autonomy_tick` requests after meaningful IDE/status changes.
+- `src/autonomy.rs` skips unchanged, non-actionable, or in-flight state before calling the model.
+- The LLM segmenter returns strict JSON task candidates and fails closed after one repair attempt.
+- Autonomy is suggest-first: accepted suggestions run through the normal bounded process path.
+
 ---
 
 ### Slice 8 — Skill and MCP Routing
@@ -2318,7 +2343,7 @@ Create the segment registry and invalidation rules.
   - Rust diagnostic repair,
   - test failure triage,
   - repo explanation.
-- Add MCP later behind the same permission policy.
+- Add MCP behind the same permission policy.
 
 #### Deliverables
 
@@ -2326,7 +2351,17 @@ Create the segment registry and invalidation rules.
 
 #### Definition of Done
 
-- Scheduler can choose a skill based on task and segment type.
+- Scheduler/autonomy can choose a skill based on task and segment type, and the VSCode process runner resolves it before exposing tools.
+
+#### Current Implementation Notes
+
+- `crates/pave-router` implements Rust JSON PAVE vectors, cosine scoring, task candidates, agent profiles, and route decisions.
+- VSCode settings provide `marvis.agentProfiles`; Rust uses built-in Rust diagnostic, test triage, and repo explainer profiles only as validated default profiles when no valid custom profiles are configured.
+- Agent profiles can name concrete `skills` and `mcp_servers`; `src/skill_mcp.rs` loads built-in skills plus workspace skills from `.marvis/skills` and `.agents/skills`.
+- Stdio MCP servers are loaded from `.marvis/mcp.json` or `.mcp.json`, initialized with JSON-RPC, discovered through `tools/list`, and exposed only when discovery succeeds.
+- Stdio MCP startup requires shell approval because it launches a local process.
+- Accepted autonomous suggestions execute with capped permissions from the routed profile; stdio clients cannot broaden a suggestion into risky shell/git/network access.
+- Route decisions include scores and reasons. MCP entries are not faked; only available local and discovered MCP tools are exposed after policy, skill capability, and allowlist filtering.
 
 ---
 
@@ -2338,7 +2373,7 @@ Create the segment registry and invalidation rules.
 
 - Add `eval-harness` crate or `benches/` runner.
 - Define local golden task format.
-- Replay traces with synthetic scheduler first.
+- Replay traces with a deterministic test scheduler first.
 - Report:
   - solve rate,
   - tool calls,
@@ -2512,7 +2547,7 @@ Pick from this pool based on what blocks the next demo:
 
 7. **Golden Task Replay**
    - recorded VSCode-style event sequence,
-   - synthetic scheduler replay,
+   - deterministic test scheduler replay,
    - solve/verify metrics,
    - segment/context/routing ablations.
 
@@ -3231,9 +3266,9 @@ The highest-priority implementation order is:
 - [x] `ThreadHandle::next_event`
 - [x] submission and event channels
 - [ ] `ProcessTable`
-- [ ] `BudgetManager`
-- [ ] `PolicyEngine`
-- [ ] trace ids and trace store
+- [x] `BudgetManager` for per-turn tool-call budget
+- [x] `PolicyEngine` first pass through `ToolPolicy`
+- [x] trace events in rollout store
 
 ### Status
 
@@ -3259,8 +3294,8 @@ The highest-priority implementation order is:
 - [x] deterministic segmenters
 - [ ] invalidation
 - [x] ranking
-- [ ] LLM segmenter
-- [ ] validator
+- [x] LLM segmenter for VSCode autonomy ticks
+- [x] validator for strict JSON task candidates
 
 ### Context
 
@@ -3273,12 +3308,14 @@ The highest-priority implementation order is:
 
 ### Agent
 
-- [ ] task capsule
+- [x] task candidate capsule for autonomous suggestions
 - [ ] planner concept inside `scheduler`
 - [ ] executor concept inside `scheduler`
 - [ ] critic for medium/high-risk tasks
 - [ ] summarizer
 - [ ] repair loop
+- [x] PAVE route scoring against configured agent profiles
+- [x] suggest-first autonomous wake-up loop
 
 ### Tools
 
@@ -3289,12 +3326,12 @@ The highest-priority implementation order is:
 - [x] list directory
 - [x] search files
 - [x] find files
-- [ ] apply patch
-- [ ] run tests
-- [ ] git diff
-- [ ] rollback
-- [ ] MCP client
-- [ ] skill registry
+- [x] apply patch
+- [x] run tests
+- [x] git diff
+- [x] rollback
+- [x] MCP client
+- [x] skill registry
 
 ### VSCode UI
 
@@ -3304,8 +3341,8 @@ The highest-priority implementation order is:
 - [x] Problems panel diagnostics ingestion
 - [x] integrated terminal/task result ingestion
 - [x] status panel
-- [ ] process/task panel
-- [ ] confirmation UI
+- [x] process/task panel
+- [x] confirmation UI
 - [x] inline suggestions
 - [x] trace viewer
 
@@ -3317,7 +3354,7 @@ The highest-priority implementation order is:
 ### Evaluation
 
 - [ ] golden task format
-- [ ] trace replay
+- [x] trace replay/debug print helper
 - [ ] metrics
 - [ ] report generator
 - [ ] SWE-bench adapter

@@ -54,6 +54,7 @@ pub struct SessionConfig {
     pub cwd: PathBuf,
     pub system_prompt: String,
     pub max_tokens: u32,
+    pub max_tool_calls: u32,
     pub approval_policy: AskForApproval,
     pub sandbox_policy: SandboxPolicy,
     pub dynamic_tools: Vec<DynamicToolSpec>,
@@ -69,10 +70,11 @@ impl SessionConfig {
         let cwd = cwd.into();
         Self {
             model: model.into(),
-            model_provider_id: "openrouter".to_string(),
+            model_provider_id: "openai-compatible".to_string(),
             cwd,
             system_prompt: String::new(),
             max_tokens: 4096,
+            max_tool_calls: 32,
             approval_policy: AskForApproval::default(),
             sandbox_policy: SandboxPolicy::default(),
             dynamic_tools: Vec::new(),
@@ -165,6 +167,7 @@ pub struct TurnRequest {
     pub turn_id: String,
     pub model: String,
     pub max_tokens: u32,
+    pub max_tool_calls: u32,
     pub system_prompt: String,
     pub history: Vec<ResponseItem>,
     pub input: Vec<UserInput>,
@@ -185,17 +188,23 @@ pub struct SchedulerOutput {
 pub struct EventEmitter {
     submission_id: String,
     tx: mpsc::Sender<Event>,
+    thread_id: ThreadId,
+    history_store: Option<Arc<dyn HistoryStore>>,
 }
 
 impl EventEmitter {
     pub async fn emit(&self, msg: EventMsg) -> Result<()> {
-        self.tx
-            .send(Event {
-                id: self.submission_id.clone(),
-                msg,
-            })
-            .await
-            .map_err(|_| KernelError::Closed)
+        let event = Event {
+            id: self.submission_id.clone(),
+            msg: msg.clone(),
+        };
+        if let Some(history_store) = &self.history_store {
+            history_store
+                .append_items(&self.thread_id, vec![RolloutItem::EventMsg(msg)])
+                .await?;
+        }
+        self.tx.send(event).await.map_err(|_| KernelError::Closed)?;
+        Ok(())
     }
 
     pub async fn tool_begin(
@@ -640,6 +649,10 @@ impl ThreadHandle {
     }
 
     pub async fn flush_rollout(&self) -> std::io::Result<()> {
+        if let Some(path) = &self.inner.rollout_path {
+            let file = tokio::fs::OpenOptions::new().read(true).open(path).await?;
+            file.sync_all().await?;
+        }
         Ok(())
     }
 
@@ -814,6 +827,11 @@ async fn run_user_turn(
     let emitter = EventEmitter {
         submission_id: submission_id.clone(),
         tx: runtime.event_tx.clone(),
+        thread_id: runtime.thread_id.clone(),
+        history_store: runtime
+            .rollout_path
+            .is_some()
+            .then(|| Arc::clone(&runtime.history_store)),
     };
     emitter
         .emit(EventMsg::TurnStarted(TurnStartedEvent {
@@ -836,6 +854,7 @@ async fn run_user_turn(
             .await?;
     }
 
+    let request_history = runtime.history.lock().await.clone();
     let user_item = ResponseItem::message("user", user_text);
     {
         runtime.history.lock().await.push(user_item.clone());
@@ -848,15 +867,15 @@ async fn run_user_turn(
         )
         .await?;
 
-    let history = runtime.history.lock().await.clone();
     let request = TurnRequest {
         thread_id: runtime.thread_id.clone(),
         submission_id: submission_id.clone(),
         turn_id: turn_id.clone(),
         model: config.model,
         max_tokens: config.max_tokens,
+        max_tool_calls: config.max_tool_calls,
         system_prompt: config.system_prompt,
-        history,
+        history: request_history,
         input,
         dynamic_tools: config.dynamic_tools,
         final_output_json_schema,
@@ -1025,12 +1044,67 @@ mod tests {
         }
     }
 
+    struct CapturingScheduler {
+        history_lengths: Arc<Mutex<Vec<usize>>>,
+    }
+
+    #[async_trait]
+    impl Scheduler for CapturingScheduler {
+        async fn run_turn(
+            &self,
+            request: TurnRequest,
+            _events: EventEmitter,
+        ) -> Result<SchedulerOutput> {
+            self.history_lengths
+                .lock()
+                .await
+                .push(request.history.len());
+            Ok(SchedulerOutput {
+                response_items: vec![ResponseItem::message("assistant", "ok")],
+                final_message: Some("ok".to_string()),
+                token_usage: None,
+            })
+        }
+    }
+
     fn manager(temp: &tempfile::TempDir) -> ThreadManager {
         ThreadManager::new(
             Arc::new(EchoScheduler),
             Arc::new(NoopTools),
             temp.path().join("history"),
         )
+    }
+
+    #[tokio::test]
+    async fn scheduler_receives_history_without_current_user_duplicate() {
+        let temp = tempfile::tempdir().unwrap();
+        let history_lengths = Arc::new(Mutex::new(Vec::new()));
+        let manager = ThreadManager::new(
+            Arc::new(CapturingScheduler {
+                history_lengths: Arc::clone(&history_lengths),
+            }),
+            Arc::new(NoopTools),
+            temp.path().join("history"),
+        );
+        let ok = manager
+            .start_thread(SessionConfig::default())
+            .await
+            .unwrap();
+        let _ = ok.thread.next_event().await.unwrap();
+
+        for text in ["first", "second"] {
+            ok.thread.submit(Op::user_text(text)).await.unwrap();
+            loop {
+                if matches!(
+                    ok.thread.next_event().await.unwrap().msg,
+                    EventMsg::TurnComplete(_)
+                ) {
+                    break;
+                }
+            }
+        }
+
+        assert_eq!(*history_lengths.lock().await, vec![0, 2]);
     }
 
     #[tokio::test]
@@ -1068,6 +1142,20 @@ mod tests {
             ok.thread.next_event().await.unwrap().msg,
             EventMsg::TurnComplete(_)
         ));
+
+        let rollout_items = rollout::read_rollout_items(ok.thread.rollout_path().unwrap())
+            .await
+            .unwrap();
+        assert!(
+            rollout_items
+                .iter()
+                .any(|item| matches!(item, RolloutItem::EventMsg(EventMsg::TurnStarted(_))))
+        );
+        assert!(
+            rollout_items
+                .iter()
+                .any(|item| matches!(item, RolloutItem::EventMsg(EventMsg::TurnComplete(_))))
+        );
     }
 
     #[tokio::test]

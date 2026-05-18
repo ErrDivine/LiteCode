@@ -159,10 +159,8 @@
 <p>The VSCode extension starts the Rust binary in stdio mode:</p>
 <pre><code class="language-text">target/debug/lite-code --vscode-stdio
 </code></pre>
-<p>If the binary is missing, the extension falls back to:</p>
-<pre><code class="language-text">cargo run --quiet -- --vscode-stdio
-</code></pre>
-<p>The extension then sends newline-delimited JSON envelopes for initialization, status updates, command results, prompts, and shutdown. The Rust side answers with typed response envelopes and streamed agent events.</p>
+<p>Published extension packages load a bundled binary from <code>bin/</code>, and development mode can use <code>target/debug/lite-code</code>. Users can always set <code>marvis.runtimePath</code> to an explicit binary. The extension does not invoke <code>cargo run</code> as a product fallback.</p>
+<p>The extension then sends newline-delimited JSON envelopes for initialization, status updates, command results, autonomy ticks, prompts, accepted suggestions, and shutdown. The Rust side answers with typed response envelopes, autonomous decisions, and streamed agent events.</p>
 <h2 id="runtime-shape"><a class="header" href="#runtime-shape">Runtime Shape</a></h2>
 <p>The runtime is built around four internal contracts:</p>
 <div class="table-wrapper"><table><thead><tr><th>Contract</th><th>Owner</th><th>Purpose</th></tr></thead><tbody>
@@ -170,14 +168,17 @@
 <tr><td>Thread runtime</td><td><code>crates/session-kernel</code></td><td>Owns submissions, active turns, cancellation, history, event emission, and persistence integration.</td></tr>
 <tr><td>Scheduler</td><td><code>crates/scheduler</code></td><td>Converts thread state into model chat messages, streams deltas, executes tool calls, and returns final response items.</td></tr>
 <tr><td>UI bridge</td><td><code>crates/ui-bridge</code></td><td>Converts kernel events into CLI, web, and VSCode-facing formats.</td></tr>
+<tr><td>PAVE router</td><td><code>crates/pave-router</code></td><td>Scores LLM-segmented tasks against configured agent profiles.</td></tr>
 </tbody></table>
 </div>
 <p>Everything else supports these contracts:</p>
 <ul>
 <li><code>crates/openai-rs</code> provides the HTTP/SSE client used by the scheduler.</li>
 <li><code>crates/status</code> turns IDE snapshots, git state, diagnostics, and command failures into deterministic context.</li>
+<li><code>src/autonomy.rs</code> checks actionable VSCode status, asks the model to segment tasks, routes them through PAVE, and stores suggest-first decisions.</li>
+<li><code>src/skill_mcp.rs</code> resolves routed agent skills and stdio MCP servers before a VSCode agent turn starts.</li>
 <li><code>crates/rollout</code>, <code>thread-store</code>, and <code>state-store</code> provide persistence surfaces.</li>
-<li><code>src/tools.rs</code> exposes the current local tool gateway.</li>
+<li><code>src/tools.rs</code> exposes the current local/MCP tool gateway.</li>
 </ul>
 <h2 id="design-intent"><a class="header" href="#design-intent">Design Intent</a></h2>
 <p>The codebase is moving toward a product where the editor is the primary context source and the Rust runtime is product-neutral. The bridge stays thin: it transports typed data but does not decide model behavior. The status crate similarly keeps its logic deterministic, so high-signal context can be tested without the model.</p>
@@ -187,19 +188,24 @@
 <ul>
 <li>CLI, web, and VSCode entrypoints.</li>
 <li>Streamed model output.</li>
-<li>Dynamic tool definitions.</li>
-<li>Local tool execution.</li>
+<li>Dynamic tool definitions filtered by runtime policy.</li>
+<li>Local tool execution with write, shell, git, and network-like policy checks.</li>
+<li>Rollback preimage snapshots for workspace write tools.</li>
+<li>Skill registry with built-in/workspace skills and stdio MCP tool discovery for routed VSCode agents.</li>
 <li>JSONL history recording.</li>
+<li>Event trace recording in rollout JSONL.</li>
 <li>Thread resume and fork basics.</li>
 <li>VSCode status ingestion.</li>
-<li>Synthetic scheduler fallback when <code>OPENROUTER_API_KEY</code> is absent.</li>
+<li>Autonomous VSCode wake-up checks with suggest-first PAVE routed tasks.</li>
+<li>OpenAI-compatible provider configuration through <code>MARVIS_API_KEY</code> and <code>MARVIS_BASE_URL</code>.</li>
 </ul>
 <p>Areas that are intentionally still simple:</p>
 <ul>
 <li>Tool policy is not yet factored into a dedicated tool-gateway crate.</li>
-<li><code>thread-store</code> has a remote stub, but no remote implementation.</li>
+<li><code>thread-store</code> is local-rollout backed; remote persistence is not exposed as a fake implementation.</li>
 <li><code>state-store</code> is a JSONL shell despite constants that still refer to database-style names.</li>
 <li>Token usage reporting is shaped in protocol types, but not fully wired through the scheduler.</li>
+<li>Autonomous execution is intentionally suggest-first; accepted suggestions run through the existing bounded prompt/process path.</li>
 </ul>
 
                     </main>

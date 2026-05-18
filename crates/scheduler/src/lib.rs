@@ -13,15 +13,41 @@ pub struct OpenAiScheduler {
     client: Client,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OpenAiCompatibleConfig {
+    pub api_key: String,
+    pub base_url: String,
+}
+
+impl OpenAiCompatibleConfig {
+    pub fn new(api_key: impl Into<String>, base_url: impl Into<String>) -> Self {
+        Self {
+            api_key: api_key.into(),
+            base_url: base_url.into(),
+        }
+    }
+}
+
 impl OpenAiScheduler {
     pub fn new(client: Client) -> Self {
         Self { client }
     }
 
-    pub fn openrouter(api_key: impl Into<String>) -> Result<Self> {
+    pub fn openai_compatible(config: OpenAiCompatibleConfig) -> Result<Self> {
+        if config.api_key.trim().is_empty() {
+            return Err(KernelError::InvalidRequest(
+                "MARVIS_API_KEY must not be empty".to_string(),
+            ));
+        }
+        if config.base_url.trim().is_empty() {
+            return Err(KernelError::InvalidRequest(
+                "MARVIS_BASE_URL must not be empty".to_string(),
+            ));
+        }
+
         let client = Client::builder()
-            .api_key(api_key)
-            .base_url("https://openrouter.ai/api/v1")
+            .api_key(config.api_key)
+            .base_url(config.base_url)
             .build()
             .map_err(|err| KernelError::InvalidRequest(err.to_string()))?;
         Ok(Self::new(client))
@@ -55,6 +81,8 @@ impl Scheduler for OpenAiScheduler {
             .iter()
             .map(tool_spec_to_openai)
             .collect::<Vec<_>>();
+        let mut tool_calls_used = 0u32;
+        let mut response_items = Vec::new();
 
         loop {
             if request.cancellation.is_cancelled() {
@@ -103,10 +131,10 @@ impl Scheduler for OpenAiScheduler {
                                 .await?;
                         }
 
-                        if let Some(reason) = delta_finish {
-                            if !reason.is_empty() {
-                                finish_reason = Some(reason);
-                            }
+                        if let Some(reason) = delta_finish
+                            && !reason.is_empty()
+                        {
+                            finish_reason = Some(reason);
                         }
 
                         if let Some(deltas) = delta_tool_calls {
@@ -154,10 +182,9 @@ impl Scheduler for OpenAiScheduler {
 
             if tool_calls.is_empty() || finish_reason.as_deref() == Some("stop") {
                 let final_message = (!content.is_empty()).then_some(content.clone());
-                let response_items = final_message
-                    .iter()
-                    .map(|message| ResponseItem::message("assistant", message.clone()))
-                    .collect();
+                if let Some(message) = &final_message {
+                    response_items.push(ResponseItem::message("assistant", message.clone()));
+                }
                 return Ok(SchedulerOutput {
                     response_items,
                     final_message,
@@ -170,7 +197,23 @@ impl Scheduler for OpenAiScheduler {
                 Some(tool_calls.clone()),
             ));
 
+            for call in &tool_calls {
+                response_items.push(ResponseItem::FunctionCall {
+                    id: (!call.id.is_empty()).then_some(call.id.clone()),
+                    name: call.function.name.clone(),
+                    arguments: call.function.arguments.clone(),
+                    call_id: call.id.clone(),
+                });
+            }
+
             for call in tool_calls {
+                if tool_calls_used >= request.max_tool_calls {
+                    return Err(KernelError::InvalidRequest(format!(
+                        "tool-call budget exceeded: max {}",
+                        request.max_tool_calls
+                    )));
+                }
+                tool_calls_used += 1;
                 events
                     .tool_begin(
                         call.id.clone(),
@@ -187,6 +230,10 @@ impl Scheduler for OpenAiScheduler {
                 events
                     .tool_end(call.id.clone(), call.function.name.clone(), output.clone())
                     .await?;
+                response_items.push(ResponseItem::FunctionCallOutput {
+                    call_id: call.id.clone(),
+                    output: output.clone(),
+                });
                 messages.push(Message::tool_result(call.id, output));
             }
         }
@@ -240,9 +287,10 @@ fn tool_spec_to_openai(spec: &DynamicToolSpec) -> ToolDefinition {
 }
 
 fn history_to_messages(history: &[ResponseItem]) -> Vec<Message> {
-    history
-        .iter()
-        .filter_map(|item| match item {
+    let mut messages = Vec::new();
+    let mut index = 0usize;
+    while index < history.len() {
+        match &history[index] {
             ResponseItem::Message { role, content, .. } => {
                 let text = content
                     .iter()
@@ -254,16 +302,77 @@ fn history_to_messages(history: &[ResponseItem]) -> Vec<Message> {
                     .collect::<Vec<_>>()
                     .join("");
                 match role.as_str() {
-                    "system" => Some(Message::system(text)),
-                    "user" => Some(Message::user(text)),
-                    "assistant" => Some(Message::assistant(Some(text), None)),
-                    _ => None,
+                    "system" => messages.push(Message::system(text)),
+                    "user" => messages.push(Message::user(text)),
+                    "assistant" => messages.push(Message::assistant(Some(text), None)),
+                    _ => {}
                 }
             }
             ResponseItem::FunctionCallOutput { call_id, output } => {
-                Some(Message::tool_result(call_id.clone(), output.clone()))
+                messages.push(Message::tool_result(call_id.clone(), output.clone()));
             }
-            ResponseItem::FunctionCall { .. } => None,
-        })
-        .collect()
+            ResponseItem::FunctionCall { .. } => {
+                let mut calls = Vec::new();
+                while let Some(ResponseItem::FunctionCall {
+                    name,
+                    arguments,
+                    call_id,
+                    ..
+                }) = history.get(index)
+                {
+                    calls.push(ToolCall {
+                        id: call_id.clone(),
+                        r#type: "function".to_string(),
+                        function: ToolCallFunction {
+                            name: name.clone(),
+                            arguments: arguments.clone(),
+                        },
+                    });
+                    index += 1;
+                }
+                if !calls.is_empty() {
+                    messages.push(Message::assistant(None, Some(calls)));
+                }
+                continue;
+            }
+        }
+        index += 1;
+    }
+    messages
+}
+
+#[cfg(test)]
+mod tests {
+    use openai_rs::Role;
+
+    use super::*;
+
+    #[test]
+    fn history_preserves_tool_calls_before_outputs() {
+        let messages = history_to_messages(&[
+            ResponseItem::message("user", "inspect"),
+            ResponseItem::FunctionCall {
+                id: Some("call-1".to_string()),
+                name: "read_file".to_string(),
+                arguments: "{\"path\":\"src/lib.rs\"}".to_string(),
+                call_id: "call-1".to_string(),
+            },
+            ResponseItem::FunctionCall {
+                id: Some("call-2".to_string()),
+                name: "git_status".to_string(),
+                arguments: "{}".to_string(),
+                call_id: "call-2".to_string(),
+            },
+            ResponseItem::FunctionCallOutput {
+                call_id: "call-1".to_string(),
+                output: "contents".to_string(),
+            },
+        ]);
+
+        assert_eq!(messages.len(), 3);
+        assert_eq!(messages[0].role, Role::User);
+        assert_eq!(messages[1].role, Role::Assistant);
+        assert_eq!(messages[1].tool_calls.as_ref().unwrap().len(), 2);
+        assert_eq!(messages[2].role, Role::Tool);
+    }
 }

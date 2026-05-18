@@ -16,6 +16,7 @@
 - [Scheduler](crates/scheduler.md)
 - [OpenAI Client](crates/openai-rs.md)
 - [Status Engine](crates/status.md)
+- [PAVE Router](crates/pave-router.md)
 - [Persistence Crates](crates/persistence.md)
 - [UI Bridge](crates/ui-bridge.md)
 
@@ -23,6 +24,7 @@
 
 - [Binary, CLI, Web, And VSCode Stdio](runtime/entrypoints.md)
 - [Local Tool Gateway](runtime/tools.md)
+- [Skill And MCP Runtime](runtime/skills-mcp.md)
 
 # Applications
 

@@ -71,6 +71,7 @@ The VSCode status snapshot includes:
 - staged files
 - deleted files
 - optional diff summary
+- optional `status_error` when `git status --porcelain=v1` fails, so the runtime does not silently report a clean tree when status collection failed
 
 `read_git_state(root)` shells out to git:
 

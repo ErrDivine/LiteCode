@@ -10,6 +10,7 @@ members = [
   "crates/scheduler",
   "crates/status",
   "crates/ui-bridge",
+  "crates/pave-router",
 ]
 resolver = "3"
 
@@ -42,11 +43,13 @@ glob = "0.3"
 regex = "1"
 futures = { workspace = true }
 axum = "0.8"
-tower-http = { version = "0.6", features = ["cors"] }
 tokio-stream = "0.1"
 async-trait = { workspace = true }
 protocol = { path = "crates/protocol" }
+rollout = { path = "crates/rollout" }
 session-kernel = { path = "crates/session-kernel" }
 scheduler = { path = "crates/scheduler" }
 status = { path = "crates/status" }
 ui-bridge = { path = "crates/ui-bridge" }
+pave-router = { path = "crates/pave-router" }
+openai-rs = { path = "crates/openai-rs" }

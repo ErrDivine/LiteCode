@@ -27,10 +27,10 @@ impl AuthProvider for BearerAuth {
 }
 
 pub(crate) fn add_auth_headers(auth: &dyn AuthProvider, mut req: Request) -> Request {
-    if let Some(token) = auth.bearer_token() {
-        if let Ok(header) = HeaderValue::from_str(&format!("Bearer {token}")) {
-            req.headers.insert(http::header::AUTHORIZATION, header);
-        }
+    if let Some(token) = auth.bearer_token()
+        && let Ok(header) = HeaderValue::from_str(&format!("Bearer {token}"))
+    {
+        req.headers.insert(http::header::AUTHORIZATION, header);
     }
     req
 }

@@ -61,16 +61,16 @@ impl Provider {
             format!("{base}/{path}")
         };
 
-        if let Some(params) = &self.query_params {
-            if !params.is_empty() {
-                let qs = params
-                    .iter()
-                    .map(|(k, v)| format!("{k}={v}"))
-                    .collect::<Vec<_>>()
-                    .join("&");
-                url.push('?');
-                url.push_str(&qs);
-            }
+        if let Some(params) = &self.query_params
+            && !params.is_empty()
+        {
+            let qs = params
+                .iter()
+                .map(|(k, v)| format!("{k}={v}"))
+                .collect::<Vec<_>>()
+                .join("&");
+            url.push('?');
+            url.push_str(&qs);
         }
 
         url

@@ -10,9 +10,8 @@ use std::convert::Infallible;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio_stream::wrappers::ReceiverStream;
-use tower_http::cors::CorsLayer;
 
-use crate::tools::tool_definitions;
+use crate::tools::{ToolPolicy, tool_definitions_for_policy};
 
 const INDEX_HTML: &str = include_str!("../static/index.html");
 
@@ -21,6 +20,7 @@ pub struct AppState {
     pub history_root: PathBuf,
     pub model: String,
     pub max_tokens: u32,
+    pub tool_policy: ToolPolicy,
 }
 
 #[derive(Deserialize)]
@@ -38,10 +38,9 @@ pub async fn serve(state: Arc<AppState>) -> anyhow::Result<()> {
     let app = Router::new()
         .route("/", get(index))
         .route("/api/chat", post(chat))
-        .layer(CorsLayer::permissive())
         .with_state(state);
 
-    let addr = "0.0.0.0:3000";
+    let addr = "127.0.0.1:3000";
     println!("lite-code running at http://localhost:3000");
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
@@ -136,7 +135,11 @@ async fn start_web_thread(state: &AppState) -> anyhow::Result<ThreadHandle> {
 
     Ok(state
         .manager
-        .start_thread_with_tools(config, tool_definitions(), true)
+        .start_thread_with_tools(
+            config,
+            tool_definitions_for_policy(&state.tool_policy),
+            true,
+        )
         .await?
         .thread)
 }

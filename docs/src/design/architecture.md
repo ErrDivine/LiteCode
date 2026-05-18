@@ -8,6 +8,9 @@ The workspace uses a layered runtime architecture. The top layer is product-spec
 VSCode extension
   -> ui-bridge JSON request/response types
   -> src/vscode.rs stdio server
+  -> autonomy coordinator for status ticks and suggestions
+  -> pave-router for task/agent scoring
+  -> skill/MCP runtime for selected agent capabilities
   -> status crate context capsule
   -> session-kernel thread
   -> scheduler model/tool turn
@@ -37,20 +40,25 @@ The important dependency direction is one-way:
 | `session-kernel` | `protocol`, `rollout`, `thread-store` | Runtime core. Depends on traits for scheduler and tools. |
 | `scheduler` | `session-kernel`, `protocol`, `openai-rs` | Implements `session-kernel::Scheduler`. |
 | `status` | `serde`, git subprocesses | Deterministic workspace status model. Independent from scheduler. |
-| `ui-bridge` | `protocol`, `status` | Surface-specific event/request shapes. |
+| `pave-router` | `serde`, `status` | Sparse PAVE vectors, agent profiles, task candidates, route scoring. |
+| `ui-bridge` | `protocol`, `status`, `pave-router` | Surface-specific event/request shapes. |
 | `lite-code` binary | all relevant crates | Composition root. |
 
 ## Composition Root
 
 `src/main.rs` composes:
 
-- `OpenAiScheduler::openrouter(api_key)` as the model scheduler.
+- `OpenAiScheduler::openai_compatible(config)` as the model scheduler.
 - `LocalToolExecutor` as the tool executor.
 - `ThreadManager::new(...)` as the thread runtime.
-- `tool_definitions()` as the dynamic tool surface.
+- `tool_definitions_for_policy(...)` as the dynamic tool surface.
 - `SessionConfig` as the per-thread runtime configuration.
 
-`src/vscode.rs` composes the same pieces, but selects `SyntheticScheduler` when `OPENROUTER_API_KEY` is missing. That fallback allows VSCode status collection and bridge testing without a live model.
+The model endpoint is configured with `MARVIS_API_KEY` and `MARVIS_BASE_URL`. Missing `MARVIS_API_KEY` is a configuration error; the VSCode product does not fall back to a fake model.
+
+The VSCode autonomy path is also composed in the binary crate. The extension sends status ticks; `src/autonomy.rs` gates unchanged or non-actionable state, calls the OpenAI-compatible chat API for task segmentation, and routes tasks through `pave-router`. The result is a suggest-first decision, not automatic tool execution.
+
+Accepted suggestions are then capped to the routed profile approval. `src/skill_mcp.rs` resolves the selected profile's concrete skills and stdio MCP servers, injects selected skill bodies into the system prompt, and exposes only local tools/MCP tools allowed by the profile and skill capabilities. Stdio MCP startup requires shell approval because it launches a local process.
 
 ## Runtime Boundaries
 
@@ -68,7 +76,7 @@ The scheduler is responsible for mapping a `TurnRequest` into model calls and to
 
 ### Tool Boundary
 
-The kernel only knows the `ToolExecutor` trait. The current implementation is `LocalToolExecutor` in the binary crate. Moving this into a dedicated crate would let policy, tracing, and permissions evolve without changing the kernel.
+The kernel only knows the `ToolExecutor` trait. The current implementation is `LocalToolExecutor` in the binary crate. It receives a `ToolPolicy`, exposes only allowed tool schemas for the current turn, can attach discovered MCP tool schemas, and still checks policy at execution time. Workspace writes create rollback snapshots before mutation. Moving this into a dedicated crate would let policy, tracing, and permissions evolve without changing the kernel.
 
 ### Status Boundary
 

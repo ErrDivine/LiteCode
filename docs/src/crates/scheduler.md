@@ -7,20 +7,20 @@
 | Type | Purpose |
 | --- | --- |
 | `OpenAiScheduler` | Real model scheduler backed by `openai-rs::Client`. |
-| `SyntheticScheduler` | Deterministic fallback scheduler for bridge and status testing. |
+| `OpenAiCompatibleConfig` | API key and base URL for an OpenAI-compatible provider. |
+| `SyntheticScheduler` | Deterministic scheduler used by tests/dev code, not by the VSCode product fallback path. |
 
 ## OpenAiScheduler
 
 Constructors:
 
 - `OpenAiScheduler::new(client)`
-- `OpenAiScheduler::openrouter(api_key)`
+- `OpenAiScheduler::openai_compatible(config)`
 
-`openrouter` builds a client with base URL:
+`openai_compatible` builds a client from:
 
-```text
-https://openrouter.ai/api/v1
-```
+- `config.api_key`
+- `config.base_url`
 
 and maps client construction errors into `KernelError::InvalidRequest`.
 
@@ -38,7 +38,7 @@ and maps client construction errors into `KernelError::InvalidRequest`.
 8. If there are no tool calls, return final assistant message as `SchedulerOutput`.
 9. If there are tool calls, emit tool begin/end events, execute each tool, append tool results to the chat messages, and continue the loop.
 
-The scheduler checks `request.cancellation.is_cancelled()` before starting a request and while reading stream events.
+The scheduler checks `request.cancellation.is_cancelled()` before starting a request and while reading stream events. It also stops execution when `request.max_tool_calls` is exceeded.
 
 ## Tool Call Assembly
 
@@ -55,14 +55,14 @@ Only builders with a non-empty function name become `ToolCall` values. Function 
 `history_to_messages` maps:
 
 - `ResponseItem::Message` with role `system`, `user`, or `assistant` to corresponding chat messages.
+- Consecutive `ResponseItem::FunctionCall` values to one assistant message with tool calls.
 - `ResponseItem::FunctionCallOutput` to a tool result message.
-- `ResponseItem::FunctionCall` is ignored today.
 
-This keeps current model requests simple but means persisted tool call records are not replayed as assistant tool-call messages yet.
+The scheduler returns function-call and function-call-output response items alongside the final assistant message, so future turns can replay tool history without malformed tool-result-only chat history.
 
 ## SyntheticScheduler
 
-The synthetic scheduler is used when the VSCode runtime starts without `OPENROUTER_API_KEY`.
+The synthetic scheduler is used by tests and explicit development code only.
 
 Behavior:
 
@@ -71,7 +71,7 @@ Behavior:
 - Emit one `AgentMessageDelta`.
 - Return a single assistant `ResponseItem`.
 
-This allows extension development, status collection, and bridge tests without a real model.
+It is not selected automatically by the VSCode product when provider config is missing.
 
 ## Design Notes
 

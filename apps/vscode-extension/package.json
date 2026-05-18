@@ -3,7 +3,7 @@
   "displayName": "Marvis Coding Agent OS",
   "description": "VSCode shell for the Marvis coding-agent runtime in lite-code.",
   "version": "0.1.0",
-  "publisher": "local",
+  "publisher": "errdivine",
   "engines": {
     "vscode": "^1.90.0"
   },
@@ -15,6 +15,7 @@
     "onCommand:marvis.start",
     "onCommand:marvis.showStatus",
     "onCommand:marvis.refreshStatus",
+    "onCommand:marvis.checkAutonomyNow",
     "onCommand:marvis.ask",
     "onCommand:marvis.askAboutSelection",
     "onCommand:marvis.fixNearCursor",
@@ -39,6 +40,11 @@
       {
         "command": "marvis.refreshStatus",
         "title": "Refresh Status",
+        "category": "Marvis"
+      },
+      {
+        "command": "marvis.checkAutonomyNow",
+        "title": "Check Autonomy Now",
         "category": "Marvis"
       },
       {
@@ -83,17 +89,139 @@
         "marvis.runtimePath": {
           "type": "string",
           "default": "",
-          "description": "Optional path to the lite-code binary. If empty, the extension tries target/debug/lite-code, then cargo run."
+          "description": "Optional path to the lite-code binary. If empty, the extension uses its packaged binary; development mode can also use target/debug/lite-code."
         },
         "marvis.model": {
           "type": "string",
-          "default": "nvidia/nemotron-3-super-120b-a12b:free",
+          "default": "gpt-4.1-mini",
           "description": "Model name passed to the Rust runtime."
+        },
+        "marvis.baseUrl": {
+          "type": "string",
+          "default": "",
+          "description": "Optional OpenAI-compatible base URL. If empty, the Rust runtime uses MARVIS_BASE_URL or https://api.openai.com/v1."
         },
         "marvis.maxTokens": {
           "type": "number",
           "default": 4096,
           "description": "Maximum response tokens per model turn."
+        },
+        "marvis.autonomy.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Allow Marvis to wake up on VSCode status changes and suggest useful agent actions."
+        },
+        "marvis.autonomy.idleDelayMs": {
+          "type": "number",
+          "default": 3000,
+          "description": "Delay before Marvis checks a quiet workspace status change."
+        },
+        "marvis.autonomy.heartbeatIntervalMs": {
+          "type": "number",
+          "default": 30000,
+          "description": "Low-frequency autonomous status check interval while the runtime is active."
+        },
+        "marvis.agentProfiles": {
+          "type": "array",
+          "default": [
+            {
+              "id": "rust-diagnostic-repair",
+              "label": "Rust Diagnostic Repair",
+              "skills": [
+                "rust-diagnostic-repair"
+              ],
+              "mcp_servers": [],
+              "skill_prompt": "You are a Rust repair agent. Focus on compiler diagnostics, failing tests, and small verified patches.",
+              "tool_allowlist": [
+                "read_file",
+                "search_files",
+                "find_files",
+                "list_directory",
+                "apply_patch",
+                "run_test",
+                "run_build",
+                "git_diff",
+                "git_status"
+              ],
+              "pave": {
+                "rust": 1,
+                "diagnostics": 0.95,
+                "tests": 0.85,
+                "patch": 0.9,
+                "risk_medium": 0.5
+              },
+              "default_approval": {
+                "allow_workspace_write": true,
+                "allow_shell": true,
+                "allow_risky_shell": false,
+                "allow_git_write": false,
+                "allow_network": false
+              }
+            },
+            {
+              "id": "test-failure-triage",
+              "label": "Test Failure Triage",
+              "skills": [
+                "test-failure-triage"
+              ],
+              "mcp_servers": [],
+              "skill_prompt": "You are a test failure triage agent. Explain the failing behavior, inspect focused code, and suggest the smallest verification path.",
+              "tool_allowlist": [
+                "read_file",
+                "search_files",
+                "find_files",
+                "list_directory",
+                "run_test",
+                "git_diff",
+                "git_status"
+              ],
+              "pave": {
+                "tests": 1,
+                "rust": 0.7,
+                "diagnostics": 0.45,
+                "explanation": 0.65,
+                "shell": 0.5
+              },
+              "default_approval": {
+                "allow_workspace_write": false,
+                "allow_shell": true,
+                "allow_risky_shell": false,
+                "allow_git_write": false,
+                "allow_network": false
+              }
+            },
+            {
+              "id": "repo-explainer",
+              "label": "Repo Explainer",
+              "skills": [
+                "repo-explainer"
+              ],
+              "mcp_servers": [],
+              "skill_prompt": "You are a repo explanation agent. Read only, summarize relationships, and avoid proposing edits unless the user asks.",
+              "tool_allowlist": [
+                "read_file",
+                "search_files",
+                "find_files",
+                "list_directory",
+                "git_diff",
+                "git_status"
+              ],
+              "pave": {
+                "explanation": 1,
+                "docs": 0.65,
+                "rust": 0.35,
+                "risk_low": 0.6
+              },
+              "default_approval": {
+                "allow_workspace_write": false,
+                "allow_shell": false,
+                "allow_risky_shell": false,
+                "allow_git_write": false,
+                "allow_network": false
+              }
+            }
+          ],
+          "description": "Agent profiles used by autonomous PAVE routing. Profiles choose model names, skills, tool allowlists, and vectors; API credentials still come only from MARVIS_API_KEY and MARVIS_BASE_URL."
         }
       }
     },

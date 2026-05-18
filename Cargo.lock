@@ -824,8 +824,11 @@ dependencies = [
  "clap",
  "futures",
  "glob",
+ "openai-rs",
+ "pave-router",
  "protocol",
  "regex",
+ "rollout",
  "scheduler",
  "serde",
  "serde_json",
@@ -833,7 +836,6 @@ dependencies = [
  "status",
  "tokio",
  "tokio-stream",
- "tower-http",
  "ui-bridge",
 ]
 
@@ -1014,6 +1016,15 @@ dependencies = [
  "redox_syscall",
  "smallvec",
  "windows-link",
+]
+
+[[package]]
+name = "pave-router"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "status",
+ "thiserror",
 ]
 
 [[package]]
@@ -1609,6 +1620,7 @@ dependencies = [
  "protocol",
  "rollout",
  "serde",
+ "serde_json",
  "tempfile",
  "thiserror",
  "tokio",
@@ -1772,6 +1784,7 @@ checksum = "e421abadd41a4225275504ea4d6566923418b7f05506fbc9c0fe86ba7396114b"
 name = "ui-bridge"
 version = "0.1.0"
 dependencies = [
+ "pave-router",
  "protocol",
  "serde",
  "serde_json",

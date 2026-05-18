@@ -78,6 +78,7 @@ Other methods:
 
 - `NotFound(ThreadId)`
 - IO errors
+- JSON metadata errors
 - rollout errors
 
 `ThreadStoreResult<T>` aliases `Result<T, ThreadStoreError>`.
@@ -123,12 +124,14 @@ Implemented behavior:
 - Loads rollout items and extracts response items.
 - Lists sessions through `rollout::get_threads_in_root`.
 - Archives by renaming the JSONL file into `archived_sessions`.
+- Persists `ThreadMetadata` sidecars under `thread_metadata/<thread-id>.json`.
+- Applies `ThreadMetadataPatch` through `update_metadata`.
 
-`update_metadata` currently returns `Ok(())` without modifying a file.
+Stored thread results include the current metadata sidecar, so `read_thread`, `load_history`, and `list_threads` observe metadata updates.
 
-### RemoteThreadStore
+### UnavailableThreadStore
 
-`RemoteThreadStore` is a stub. It returns `NotFound` for thread-specific operations and an empty page for `list_threads`.
+`UnavailableThreadStore` is an explicit erroring implementation for callers that need to wire a `ThreadStore` trait object before a real backend exists. It returns `Unsupported` IO errors instead of pretending to be an empty remote store.
 
 ### ThreadRecorder
 

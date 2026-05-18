@@ -30,7 +30,7 @@ impl StateRuntime {
             state_db_version: STATE_DB_VERSION,
             logs_db_version: LOGS_DB_VERSION,
         };
-        let bytes = serde_json::to_vec_pretty(&marker).unwrap_or_default();
+        let bytes = serde_json::to_vec_pretty(&marker).map_err(json_error)?;
         tokio::fs::write(self.root.join("migrations.json"), bytes).await
     }
 
@@ -42,7 +42,7 @@ impl StateRuntime {
             .append(true)
             .open(path)
             .await?;
-        let line = serde_json::to_string(&metadata).unwrap_or_default();
+        let line = serde_json::to_string(&metadata).map_err(json_error)?;
         file.write_all(line.as_bytes()).await?;
         file.write_all(b"\n").await?;
         Ok(())
@@ -56,10 +56,14 @@ impl StateRuntime {
             .append(true)
             .open(path)
             .await?;
-        let line = serde_json::to_string(&entry).unwrap_or_default();
+        let line = serde_json::to_string(&entry).map_err(json_error)?;
         file.write_all(line.as_bytes()).await?;
         file.write_all(b"\n").await
     }
+}
+
+fn json_error(err: serde_json::Error) -> std::io::Error {
+    std::io::Error::new(std::io::ErrorKind::InvalidData, err)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

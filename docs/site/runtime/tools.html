@@ -154,13 +154,14 @@
                 <div id="content" class="content">
                     <main>
                         <h1 id="local-tool-gateway"><a class="header" href="#local-tool-gateway">Local Tool Gateway</a></h1>
-<p><code>src/tools.rs</code> implements the current local tool executor and dynamic tool schema list. It is not a separate crate yet, but it is a major runtime interface because model tool calls pass through it.</p>
+<p><code>src/tools.rs</code> implements the current local tool executor, dynamic tool schema list, and runtime policy checks. It is not a separate crate yet, but it is a major runtime interface because model tool calls pass through it.</p>
 <h2 id="public-types-and-functions"><a class="header" href="#public-types-and-functions">Public Types And Functions</a></h2>
 <div class="table-wrapper"><table><thead><tr><th>Item</th><th>Purpose</th></tr></thead><tbody>
 <tr><td><code>ToolResult</code></td><td>Internal result wrapper with <code>output: String</code>.</td></tr>
-<tr><td><code>LocalToolExecutor</code></td><td>Implements <code>session_kernel::ToolExecutor</code>.</td></tr>
-<tr><td><code>tool_definitions()</code></td><td>Returns dynamic JSON schemas for all exposed tools.</td></tr>
-<tr><td><code>execute_tool(name, input)</code></td><td>Dispatches tool execution by name.</td></tr>
+<tr><td><code>ToolPolicy</code></td><td>Per-turn permissions for workspace writes, shell, risky shell, git writes, network-like commands, cwd, and timeout.</td></tr>
+<tr><td><code>LocalToolExecutor</code></td><td>Implements <code>session_kernel::ToolExecutor</code> using a <code>ToolPolicy</code>, plus optional discovered MCP tools.</td></tr>
+<tr><td><code>tool_definitions_for_policy(policy)</code></td><td>Returns only the dynamic JSON schemas allowed by the current policy.</td></tr>
+<tr><td><code>execute_tool_with_policy(policy, name, input)</code></td><td>Dispatches tool execution by name and checks policy again at runtime.</td></tr>
 </tbody></table>
 </div>
 <h2 id="constants"><a class="header" href="#constants">Constants</a></h2>
@@ -173,20 +174,24 @@
 </ul>
 <h2 id="exposed-tools"><a class="header" href="#exposed-tools">Exposed Tools</a></h2>
 <h3 id="shell"><a class="header" href="#shell"><code>shell</code></a></h3>
-<p>Runs a shell command in the current working directory.</p>
+<p>Runs a shell command in the configured workspace.</p>
 <p>Parameters:</p>
 <ul>
 <li><code>command: string</code></li>
 </ul>
 <p>Behavior:</p>
 <ul>
-<li>On Windows, tries PowerShell first, then <code>cmd /C</code>.</li>
+<li>On Windows, runs PowerShell.</li>
 <li>On other platforms, runs <code>sh -c</code>.</li>
+<li>Blocks unsafe commands unless risky-shell permission is granted.</li>
+<li>Blocks network-like commands unless network permission is granted.</li>
+<li>Blocks git write commands unless git-write permission is granted.</li>
+<li>Enforces command timeout.</li>
 <li>Combines stdout and stderr.</li>
 <li>Returns exit code text if output is empty.</li>
 <li>Truncates long output.</li>
 </ul>
-<p>Design note: this tool has broad local execution power. Policy and approval should eventually live in a dedicated tool gateway.</p>
+<p>Design note: this tool still belongs in the binary crate, but it is no longer unrestricted.</p>
 <h3 id="write_file"><a class="header" href="#write_file"><code>write_file</code></a></h3>
 <p>Writes content to a file, creating parent directories when needed.</p>
 <p>Parameters:</p>
@@ -197,6 +202,10 @@
 <p>Behavior:</p>
 <ul>
 <li>Overwrites existing files.</li>
+<li>Requires workspace-write permission.</li>
+<li>Rejects paths outside the workspace.</li>
+<li>Rejects writes inside unsafe internal/cache directories.</li>
+<li>Creates a rollback preimage snapshot before writing.</li>
 <li>Returns byte count or error text.</li>
 </ul>
 <h3 id="read_file"><a class="header" href="#read_file"><code>read_file</code></a></h3>
@@ -228,6 +237,9 @@
 <li>Rejects no-op replacements.</li>
 <li>Requires exactly one match.</li>
 <li>Writes the modified file.</li>
+<li>Requires workspace-write permission.</li>
+<li>Rejects paths outside the workspace.</li>
+<li>Creates a rollback preimage snapshot before writing.</li>
 </ul>
 <p>This is the preferred targeted edit tool from the system prompt.</p>
 <h3 id="list_directory"><a class="header" href="#list_directory"><code>list_directory</code></a></h3>
@@ -238,6 +250,7 @@
 </ul>
 <p>Behavior:</p>
 <ul>
+<li>Restricts paths to the workspace.</li>
 <li>Appends <code>/</code> to directories.</li>
 <li>Shows file sizes for files.</li>
 <li>Sorts results.</li>
@@ -253,6 +266,7 @@
 </ul>
 <p>Behavior:</p>
 <ul>
+<li>Restricts search roots to the workspace.</li>
 <li>Skips common non-source directories.</li>
 <li>Supports literal search or regex search.</li>
 <li>Applies include glob to file names.</li>
@@ -269,8 +283,62 @@
 <p>Behavior:</p>
 <ul>
 <li>Joins <code>path</code> and <code>pattern</code>.</li>
+<li>Restricts the base path to the workspace and rejects <code>..</code> in glob patterns.</li>
 <li>Uses the <code>glob</code> crate.</li>
 <li>Limits result count.</li>
+</ul>
+<h3 id="apply_patch"><a class="header" href="#apply_patch"><code>apply_patch</code></a></h3>
+<p>Applies a unified diff patch with <code>git apply</code>.</p>
+<p>Parameters:</p>
+<ul>
+<li><code>patch: string</code></li>
+</ul>
+<p>Behavior:</p>
+<ul>
+<li>Requires workspace-write permission.</li>
+<li>Rejects absolute/out-of-workspace patch paths.</li>
+<li>Creates rollback preimage snapshots for affected files before applying.</li>
+<li>Uses a timeout.</li>
+</ul>
+<h3 id="list_rollbacks"><a class="header" href="#list_rollbacks"><code>list_rollbacks</code></a></h3>
+<p>Lists rollback snapshots under <code>.marvis/rollback</code>.</p>
+<p>Parameters:</p>
+<ul>
+<li>optional <code>limit: integer</code>, default <code>20</code></li>
+</ul>
+<p>Behavior:</p>
+<ul>
+<li>Does not require workspace-write permission.</li>
+<li>Returns snapshot ids, creation times, operations, and affected files.</li>
+</ul>
+<h3 id="restore_rollback"><a class="header" href="#restore_rollback"><code>restore_rollback</code></a></h3>
+<p>Restores files from a rollback snapshot id.</p>
+<p>Parameters:</p>
+<ul>
+<li><code>id: string</code></li>
+</ul>
+<p>Behavior:</p>
+<ul>
+<li>Requires workspace-write permission.</li>
+<li>Creates a new undo snapshot before restoring.</li>
+<li>Restores deleted/new-file state as well as file contents.</li>
+</ul>
+<h3 id="mcp-tools"><a class="header" href="#mcp-tools">MCP tools</a></h3>
+<p>When a routed VSCode agent selects configured MCP servers, <code>LocalToolExecutor</code> can also execute discovered stdio MCP tools. MCP tool names are exposed as <code>mcp__server__tool</code> and are only present after successful discovery.</p>
+<h3 id="run_test-run_build-run_formatter"><a class="header" href="#run_test-run_build-run_formatter"><code>run_test</code>, <code>run_build</code>, <code>run_formatter</code></a></h3>
+<p>Run allowlisted local commands for verification.</p>
+<p>Behavior:</p>
+<ul>
+<li>Require shell permission.</li>
+<li>Accept only safe command families for each helper.</li>
+<li>Enforce timeout and output truncation.</li>
+</ul>
+<h3 id="git_status-git_diff"><a class="header" href="#git_status-git_diff"><code>git_status</code>, <code>git_diff</code></a></h3>
+<p>Read-only git helpers.</p>
+<p>Behavior:</p>
+<ul>
+<li>Require shell permission.</li>
+<li>Use allowlisted git commands only.</li>
 </ul>
 <h2 id="helper-functions"><a class="header" href="#helper-functions">Helper Functions</a></h2>
 <ul>
@@ -282,13 +350,12 @@
 </ul>
 <p>The parsers accept both JSON primitives and stringified values where useful. This makes tool execution more robust against imperfect model arguments.</p>
 <h2 id="design-notes"><a class="header" href="#design-notes">Design Notes</a></h2>
-<p>The current implementation values simplicity over policy. It should be considered a development tool gateway, not a final security boundary.</p>
+<p>The current implementation now enforces policy in two places: it only exposes allowed tool schemas to the model, and it checks the policy again when a tool call arrives.</p>
 <p>Recommended future direction:</p>
 <ul>
-<li>Move tools into a crate with explicit policy and tracing.</li>
+<li>Move tools into a crate once the policy API is stable.</li>
 <li>Return structured status in addition to text output.</li>
-<li>Persist tool call records as response items or trace events.</li>
-<li>Separate read-only tools from mutating and shell tools.</li>
+<li>Persist tool call records as response items in addition to trace events.</li>
 </ul>
 
                     </main>
@@ -299,7 +366,7 @@
                                 <i class="fa fa-angle-left"></i>
                             </a>
 
-                            <a rel="next prefetch" href="../apps/vscode-extension.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                            <a rel="next prefetch" href="../runtime/skills-mcp.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <i class="fa fa-angle-right"></i>
                             </a>
 
@@ -313,7 +380,7 @@
                         <i class="fa fa-angle-left"></i>
                     </a>
 
-                    <a rel="next prefetch" href="../apps/vscode-extension.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                    <a rel="next prefetch" href="../runtime/skills-mcp.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <i class="fa fa-angle-right"></i>
                     </a>
             </nav>

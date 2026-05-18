@@ -1,15 +1,16 @@
 # Local Tool Gateway
 
-`src/tools.rs` implements the current local tool executor and dynamic tool schema list. It is not a separate crate yet, but it is a major runtime interface because model tool calls pass through it.
+`src/tools.rs` implements the current local tool executor, dynamic tool schema list, and runtime policy checks. It is not a separate crate yet, but it is a major runtime interface because model tool calls pass through it.
 
 ## Public Types And Functions
 
 | Item | Purpose |
 | --- | --- |
 | `ToolResult` | Internal result wrapper with `output: String`. |
-| `LocalToolExecutor` | Implements `session_kernel::ToolExecutor`. |
-| `tool_definitions()` | Returns dynamic JSON schemas for all exposed tools. |
-| `execute_tool(name, input)` | Dispatches tool execution by name. |
+| `ToolPolicy` | Per-turn permissions for workspace writes, shell, risky shell, git writes, network-like commands, cwd, and timeout. |
+| `LocalToolExecutor` | Implements `session_kernel::ToolExecutor` using a `ToolPolicy`, plus optional discovered MCP tools. |
+| `tool_definitions_for_policy(policy)` | Returns only the dynamic JSON schemas allowed by the current policy. |
+| `execute_tool_with_policy(policy, name, input)` | Dispatches tool execution by name and checks policy again at runtime. |
 
 ## Constants
 
@@ -23,7 +24,7 @@
 
 ### `shell`
 
-Runs a shell command in the current working directory.
+Runs a shell command in the configured workspace.
 
 Parameters:
 
@@ -31,13 +32,17 @@ Parameters:
 
 Behavior:
 
-- On Windows, tries PowerShell first, then `cmd /C`.
+- On Windows, runs PowerShell.
 - On other platforms, runs `sh -c`.
+- Blocks unsafe commands unless risky-shell permission is granted.
+- Blocks network-like commands unless network permission is granted.
+- Blocks git write commands unless git-write permission is granted.
+- Enforces command timeout.
 - Combines stdout and stderr.
 - Returns exit code text if output is empty.
 - Truncates long output.
 
-Design note: this tool has broad local execution power. Policy and approval should eventually live in a dedicated tool gateway.
+Design note: this tool still belongs in the binary crate, but it is no longer unrestricted.
 
 ### `write_file`
 
@@ -51,6 +56,10 @@ Parameters:
 Behavior:
 
 - Overwrites existing files.
+- Requires workspace-write permission.
+- Rejects paths outside the workspace.
+- Rejects writes inside unsafe internal/cache directories.
+- Creates a rollback preimage snapshot before writing.
 - Returns byte count or error text.
 
 ### `read_file`
@@ -86,6 +95,9 @@ Behavior:
 - Rejects no-op replacements.
 - Requires exactly one match.
 - Writes the modified file.
+- Requires workspace-write permission.
+- Rejects paths outside the workspace.
+- Creates a rollback preimage snapshot before writing.
 
 This is the preferred targeted edit tool from the system prompt.
 
@@ -99,6 +111,7 @@ Parameters:
 
 Behavior:
 
+- Restricts paths to the workspace.
 - Appends `/` to directories.
 - Shows file sizes for files.
 - Sorts results.
@@ -116,6 +129,7 @@ Parameters:
 
 Behavior:
 
+- Restricts search roots to the workspace.
 - Skips common non-source directories.
 - Supports literal search or regex search.
 - Applies include glob to file names.
@@ -134,8 +148,74 @@ Parameters:
 Behavior:
 
 - Joins `path` and `pattern`.
+- Restricts the base path to the workspace and rejects `..` in glob patterns.
 - Uses the `glob` crate.
 - Limits result count.
+
+### `apply_patch`
+
+Applies a unified diff patch with `git apply`.
+
+Parameters:
+
+- `patch: string`
+
+Behavior:
+
+- Requires workspace-write permission.
+- Rejects absolute/out-of-workspace patch paths.
+- Creates rollback preimage snapshots for affected files before applying.
+- Uses a timeout.
+
+### `list_rollbacks`
+
+Lists rollback snapshots under `.marvis/rollback`.
+
+Parameters:
+
+- optional `limit: integer`, default `20`
+
+Behavior:
+
+- Does not require workspace-write permission.
+- Returns snapshot ids, creation times, operations, and affected files.
+
+### `restore_rollback`
+
+Restores files from a rollback snapshot id.
+
+Parameters:
+
+- `id: string`
+
+Behavior:
+
+- Requires workspace-write permission.
+- Creates a new undo snapshot before restoring.
+- Restores deleted/new-file state as well as file contents.
+
+### MCP tools
+
+When a routed VSCode agent selects configured MCP servers, `LocalToolExecutor` can also execute discovered stdio MCP tools. MCP tool names are exposed as `mcp__server__tool` and are only present after successful discovery.
+
+### `run_test`, `run_build`, `run_formatter`
+
+Run allowlisted local commands for verification.
+
+Behavior:
+
+- Require shell permission.
+- Accept only safe command families for each helper.
+- Enforce timeout and output truncation.
+
+### `git_status`, `git_diff`
+
+Read-only git helpers.
+
+Behavior:
+
+- Require shell permission.
+- Use allowlisted git commands only.
 
 ## Helper Functions
 
@@ -149,11 +229,10 @@ The parsers accept both JSON primitives and stringified values where useful. Thi
 
 ## Design Notes
 
-The current implementation values simplicity over policy. It should be considered a development tool gateway, not a final security boundary.
+The current implementation now enforces policy in two places: it only exposes allowed tool schemas to the model, and it checks the policy again when a tool call arrives.
 
 Recommended future direction:
 
-- Move tools into a crate with explicit policy and tracing.
+- Move tools into a crate once the policy API is stable.
 - Return structured status in addition to text output.
-- Persist tool call records as response items or trace events.
-- Separate read-only tools from mutating and shell tools.
+- Persist tool call records as response items in addition to trace events.

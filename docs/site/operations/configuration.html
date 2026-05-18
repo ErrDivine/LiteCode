@@ -156,25 +156,46 @@
                         <h1 id="configuration-and-data-locations"><a class="header" href="#configuration-and-data-locations">Configuration And Data Locations</a></h1>
 <h2 id="environment-variables"><a class="header" href="#environment-variables">Environment Variables</a></h2>
 <div class="table-wrapper"><table><thead><tr><th>Variable</th><th>Used by</th><th>Meaning</th></tr></thead><tbody>
-<tr><td><code>OPENROUTER_API_KEY</code></td><td>CLI, web, VSCode runtime</td><td>API key for OpenRouter/OpenAI-compatible requests. Required for CLI and web modes. Optional for VSCode, which falls back to synthetic scheduling.</td></tr>
+<tr><td><code>MARVIS_API_KEY</code></td><td>CLI, web, VSCode runtime</td><td>API key for any OpenAI-compatible chat completions provider. Required for real model turns.</td></tr>
+<tr><td><code>MARVIS_BASE_URL</code></td><td>CLI, web, VSCode runtime</td><td>Optional OpenAI-compatible base URL. Defaults to <code>https://api.openai.com/v1</code>.</td></tr>
 <tr><td><code>LITE_CODE_STATE_HOME</code></td><td><code>state-store</code> constant</td><td>Intended state root override. The current implementation exposes the constant but does not wire global discovery through it.</td></tr>
 </tbody></table>
 </div>
 <h2 id="cli-flags"><a class="header" href="#cli-flags">CLI Flags</a></h2>
 <div class="table-wrapper"><table><thead><tr><th>Flag</th><th>Meaning</th></tr></thead><tbody>
-<tr><td><code>--web</code></td><td>Start the Axum web harness on <code>0.0.0.0:3000</code>.</td></tr>
+<tr><td><code>--web</code></td><td>Start the Axum web harness on <code>127.0.0.1:3000</code>.</td></tr>
 <tr><td><code>--vscode-stdio</code></td><td>Start the JSON stdio server for the VSCode extension.</td></tr>
 <tr><td><code>--model</code>, <code>-m</code></td><td>Select the model name.</td></tr>
+<tr><td><code>--base-url</code></td><td>Override <code>MARVIS_BASE_URL</code> for this run.</td></tr>
 <tr><td><code>--max-tokens</code></td><td>Select maximum response tokens.</td></tr>
+<tr><td><code>--allow-workspace-write</code></td><td>Allow model-requested file writes in CLI/web harnesses.</td></tr>
+<tr><td><code>--allow-risky-shell</code></td><td>Allow broader shell/git/network-like commands in CLI/web harnesses.</td></tr>
+<tr><td><code>--print-trace &lt;path&gt;</code></td><td>Print a replayable trace summary from a rollout JSONL file.</td></tr>
 </tbody></table>
 </div>
 <h2 id="vscode-settings"><a class="header" href="#vscode-settings">VSCode Settings</a></h2>
 <div class="table-wrapper"><table><thead><tr><th>Setting</th><th>Meaning</th></tr></thead><tbody>
 <tr><td><code>marvis.runtimePath</code></td><td>Absolute or workspace-relative binary path to run instead of auto-detected runtime.</td></tr>
 <tr><td><code>marvis.model</code></td><td>Model passed to <code>Initialize</code>.</td></tr>
+<tr><td><code>marvis.baseUrl</code></td><td>Optional OpenAI-compatible base URL passed to <code>Initialize</code>.</td></tr>
 <tr><td><code>marvis.maxTokens</code></td><td>Max tokens passed to <code>Initialize</code>.</td></tr>
+<tr><td><code>marvis.autonomy.enabled</code></td><td>Enables VSCode status wake-up checks and suggest-first autonomous routing.</td></tr>
+<tr><td><code>marvis.autonomy.idleDelayMs</code></td><td>Debounce delay before sending an autonomy tick after status changes.</td></tr>
+<tr><td><code>marvis.autonomy.heartbeatIntervalMs</code></td><td>Heartbeat interval for low-frequency status checks while the runtime is active.</td></tr>
+<tr><td><code>marvis.agentProfiles</code></td><td>Agent model names, skill ids, MCP server ids, tool allowlists, approval defaults, and PAVE vectors.</td></tr>
 </tbody></table>
 </div>
+<p>Agent profiles never contain API keys or base URLs. They select model names against the same OpenAI-compatible provider configured by <code>MARVIS_API_KEY</code> and <code>MARVIS_BASE_URL</code>.</p>
+<h2 id="workspace-skill-and-mcp-config"><a class="header" href="#workspace-skill-and-mcp-config">Workspace Skill And MCP Config</a></h2>
+<p>Workspace skills are loaded from:</p>
+<pre><code class="language-text">.marvis/skills/**/SKILL.md
+.agents/skills/**/SKILL.md
+</code></pre>
+<p>Stdio MCP servers are loaded from:</p>
+<pre><code class="language-text">.marvis/mcp.json
+.mcp.json
+</code></pre>
+<p>MCP config follows the <code>mcpServers</code> JSON shape documented in <a href="../runtime/skills-mcp.html">Skill And MCP Runtime</a>.</p>
 <h2 id="runtime-data"><a class="header" href="#runtime-data">Runtime Data</a></h2>
 <h3 id="thread-rollouts"><a class="header" href="#thread-rollouts">Thread Rollouts</a></h3>
 <p>The binary and VSCode runtime use a <code>.lite-code</code> directory under the current workspace root.</p>
@@ -189,15 +210,22 @@
 &lt;root&gt;/logs.jsonl
 </code></pre>
 <p>This store is not yet the primary thread history path.</p>
+<h3 id="rollback-snapshots"><a class="header" href="#rollback-snapshots">Rollback Snapshots</a></h3>
+<p>Workspace write tools store rollback preimages under:</p>
+<pre><code class="language-text">.marvis/rollback/&lt;snapshot-id&gt;/manifest.json
+.marvis/rollback/&lt;snapshot-id&gt;/files/*.bin
+</code></pre>
+<p>Use the <code>list_rollbacks</code> and <code>restore_rollback</code> tools to inspect and restore snapshots.</p>
 <h2 id="network-behavior"><a class="header" href="#network-behavior">Network Behavior</a></h2>
-<p>CLI and web modes require a live OpenRouter key and create <code>OpenAiScheduler</code>. VSCode stdio mode creates:</p>
+<p>All product/runtime modes use <code>OpenAiScheduler</code> with an OpenAI-compatible provider config:</p>
 <ul>
-<li><code>OpenAiScheduler</code> when <code>OPENROUTER_API_KEY</code> is present and non-empty.</li>
-<li><code>SyntheticScheduler</code> otherwise.</li>
+<li><code>MARVIS_API_KEY</code> supplies the bearer token.</li>
+<li><code>MARVIS_BASE_URL</code> supplies the provider URL, or defaults to <code>https://api.openai.com/v1</code>.</li>
 </ul>
+<p>If <code>MARVIS_API_KEY</code> is missing, the runtime returns a clear configuration error. It does not use a production fake-model fallback.</p>
 <h2 id="ports"><a class="header" href="#ports">Ports</a></h2>
 <p>The web harness binds:</p>
-<pre><code class="language-text">0.0.0.0:3000
+<pre><code class="language-text">127.0.0.1:3000
 </code></pre>
 <p>There is no dynamic port fallback in the current implementation.</p>
 
