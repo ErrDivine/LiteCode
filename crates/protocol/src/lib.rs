@@ -195,6 +195,8 @@ pub enum ResponseItem {
         end_turn: Option<bool>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         phase: Option<MessagePhase>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        reasoning_content: Option<String>,
     },
     FunctionCall {
         #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -202,6 +204,8 @@ pub enum ResponseItem {
         name: String,
         arguments: String,
         call_id: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        reasoning_content: Option<String>,
     },
     FunctionCallOutput {
         call_id: String,
@@ -224,6 +228,7 @@ impl ResponseItem {
             content,
             end_turn: None,
             phase: None,
+            reasoning_content: None,
         }
     }
 

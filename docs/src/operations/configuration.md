@@ -4,8 +4,8 @@
 
 | Variable | Used by | Meaning |
 | --- | --- | --- |
-| `MARVIS_API_KEY` | CLI, web, VSCode runtime | API key for any OpenAI-compatible chat completions provider. Required for real model turns. |
-| `MARVIS_BASE_URL` | CLI, web, VSCode runtime | Optional OpenAI-compatible base URL. Defaults to `https://api.openai.com/v1`. |
+| `MARVIS_API_KEY` | CLI, web | API key for any OpenAI-compatible chat completions provider. Required for real CLI/web model turns. |
+| `MARVIS_BASE_URL` | CLI, web, VSCode runtime fallback | Optional OpenAI-compatible base URL. Defaults to `https://api.openai.com/v1`. |
 | `LITE_CODE_STATE_HOME` | `state-store` constant | Intended state root override. The current implementation exposes the constant but does not wire global discovery through it. |
 
 ## CLI Flags
@@ -27,14 +27,16 @@
 | --- | --- |
 | `marvis.runtimePath` | Absolute or workspace-relative binary path to run instead of auto-detected runtime. |
 | `marvis.model` | Model passed to `Initialize`. |
+| `marvis.apiKey` | API key passed to `Initialize` for the OpenAI-compatible provider. |
 | `marvis.baseUrl` | Optional OpenAI-compatible base URL passed to `Initialize`. |
+| `marvis.thinkingMode` | `auto`, `disabled`, `enabled`, or `provider_default`; `auto` disables DeepSeek thinking and omits the parameter elsewhere. |
+| `marvis.reasoningEffort` | Optional `low`, `medium`, or `high` reasoning effort for compatible providers. |
 | `marvis.maxTokens` | Max tokens passed to `Initialize`. |
 | `marvis.autonomy.enabled` | Enables VSCode status wake-up checks and suggest-first autonomous routing. |
 | `marvis.autonomy.idleDelayMs` | Debounce delay before sending an autonomy tick after status changes. |
 | `marvis.autonomy.heartbeatIntervalMs` | Heartbeat interval for low-frequency status checks while the runtime is active. |
-| `marvis.agentProfiles` | Agent model names, skill ids, MCP server ids, tool allowlists, approval defaults, and PAVE vectors. |
 
-Agent profiles never contain API keys or base URLs. They select model names against the same OpenAI-compatible provider configured by `MARVIS_API_KEY` and `MARVIS_BASE_URL`.
+VSCode no longer accepts manually configured agent profiles. Store `marvis.apiKey` in User or Machine Settings rather than committed workspace settings; agent identities are synthesized inside the runtime from discovered skills, declared tool dependencies, MCP dependencies, and built-in toolsets. Every generated agent uses the shared `marvis.model`, `marvis.apiKey`, and `marvis.baseUrl` provider settings.
 
 ## Workspace Skill And MCP Config
 
@@ -45,11 +47,13 @@ Workspace skills are loaded from:
 .agents/skills/**/SKILL.md
 ```
 
-Bundled system skills are materialized under:
+Bundled system skills are built from `skills/system/**/SKILL.md`, including imported Anthropic and local Codex skill packages, then materialized under:
 
 ```text
 .lite-code/skills/.system/**/SKILL.md
 ```
+
+To add a project-specific skill, use a workspace skill path. To ship a new built-in skill with Marvis itself, add a package under `skills/system`; the build script embeds its resources automatically.
 
 Stdio MCP servers are loaded from:
 
@@ -100,10 +104,12 @@ Use the `list_rollbacks` and `restore_rollback` tools to inspect and restore sna
 
 All product/runtime modes use `OpenAiScheduler` with an OpenAI-compatible provider config:
 
-- `MARVIS_API_KEY` supplies the bearer token.
-- `MARVIS_BASE_URL` supplies the provider URL, or defaults to `https://api.openai.com/v1`.
+- `marvis.apiKey` supplies the bearer token in VSCode.
+- `MARVIS_API_KEY` supplies the bearer token in CLI/web modes.
+- `MARVIS_BASE_URL` supplies the provider URL in CLI/web modes and as a VSCode fallback, or defaults to `https://api.openai.com/v1`.
+- `marvis.thinkingMode=auto` sends disabled thinking for DeepSeek-compatible endpoints so tool-call loops do not require reasoning content by default.
 
-If `MARVIS_API_KEY` is missing, the runtime returns a clear configuration error. It does not use a production fake-model fallback.
+If the relevant API key is missing, the runtime returns a clear configuration error. It does not use a production fake-model fallback.
 
 ## Ports
 

@@ -15,7 +15,7 @@ Main responsibilities:
 
 - Parse CLI flags.
 - Select VSCode stdio, web, or CLI mode.
-- Read `MARVIS_API_KEY` and optional `MARVIS_BASE_URL`.
+- Read OpenAI-compatible provider configuration.
 - Build `OpenAiScheduler`, `LocalToolExecutor`, and `ThreadManager`.
 - Start a thread with policy-filtered local tool definitions.
 - Consume runtime events and adapt them for the selected UI.
@@ -115,7 +115,7 @@ Fields:
 - base URL
 - max tokens
 - next process id
-- configured agent profiles
+- auto-detected agent profiles
 - autonomy coordinator
 
 ### Request Handling
@@ -124,7 +124,8 @@ Fields:
 
 - Sets workspace root, model, and max tokens.
 - Creates a new `StatusStore`.
-- Loads `MARVIS_API_KEY` and base URL.
+- Loads `marvis.apiKey` and base URL from the initialize payload.
+- Loads bundled and workspace skills, then generates same-model agent identities from skills and built-in toolsets.
 - Returns `Ready`.
 
 `StatusUpdate`:
@@ -153,9 +154,10 @@ Fields:
 `AutonomyTick`:
 
 - Updates VSCode status and git state.
-- Skips unchanged, non-actionable, or in-flight state.
-- Calls the OpenAI-compatible model for strict JSON task segmentation.
-- Routes task candidates against configured agent profiles with PAVE cosine scoring.
+- Skips in-flight, unchanged, busy, ambiguous, or merely dirty/risky state.
+- Calls the OpenAI-compatible model for strict JSON task segmentation when VSCode status points to a focused, useful next step; the segmenter prompt biases toward specific suggest-first action rather than waiting for perfect certainty.
+- Requires the segmenter to choose an agent id from the auto-detected skill/toolset agents before permission is requested.
+- Uses PAVE matching only as a compatibility fallback when older task payloads do not include an agent id.
 - Returns `AutonomyDecision::Idle`, `Suggest`, or `Suppressed`.
 
 `RunSuggestedTask`:
@@ -164,7 +166,7 @@ Fields:
 - Caps the request approval to the stored routed approval.
 - Resolves the selected agent's skills and MCP servers.
 - Adds selected skill instructions to the system prompt.
-- Filters visible tools by runtime policy, selected skill package local-tool dependencies, and the agent tool allowlist.
+- Filters visible tools by runtime policy, selected skill package local-tool dependencies, and the generated agent tool allowlist.
 - Exposes discovered stdio MCP tools only when MCP discovery succeeds.
 - Runs the existing bounded VSCode prompt flow.
 
@@ -180,7 +182,7 @@ Fields:
 
 ### VSCode System Prompt
 
-`VSCODE_SYSTEM_PROMPT` tells the model to treat VSCode status as data, pay attention to active editor, cursor, diagnostics, command failures, and git state, and to be cautious with risky edits.
+`VSCODE_SYSTEM_PROMPT` tells the model to treat VSCode status as data, pay attention to active editor, cursor, diagnostics, command failures, and git state, infer the immediate user intent implied by that status, stay focused on that intent, use no more than 15 tool calls in one turn, and be cautious with risky edits.
 
 ## Design Notes
 

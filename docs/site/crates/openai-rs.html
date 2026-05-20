@@ -168,7 +168,7 @@
 <tr><td><code>error.rs</code></td><td>Transport, stream, and API error enums.</td></tr>
 <tr><td><code>chat/mod.rs</code></td><td>Chat namespace.</td></tr>
 <tr><td><code>chat/completions.rs</code></td><td>Chat completion create and create_stream APIs.</td></tr>
-<tr><td><code>types/chat.rs</code></td><td>Chat request, message, role, tool call, and response types.</td></tr>
+<tr><td><code>types/chat.rs</code></td><td>Chat request, thinking options, message, role, tool call, and response types.</td></tr>
 <tr><td><code>types/common.rs</code></td><td>Tool definition, function definition, usage, finish reason.</td></tr>
 <tr><td><code>types/stream.rs</code></td><td>Streaming chunk and delta types.</td></tr>
 </tbody></table>
@@ -181,7 +181,7 @@
 <li><code>Client</code>, <code>ClientBuilder</code></li>
 <li><code>ApiError</code>, <code>StreamError</code>, <code>TransportError</code></li>
 <li><code>Provider</code>, <code>RetryConfig</code></li>
-<li>chat request/response/message/tool types</li>
+<li>chat request/response/message/tool types, including DeepSeek-style <code>thinking</code> and <code>reasoning_content</code></li>
 <li>common usage and finish-reason types</li>
 <li>streaming delta types</li>
 </ul>
@@ -212,6 +212,8 @@
 <li>stream idle timeout</li>
 </ul>
 <p><code>Provider::url_for_path</code> joins base URL, path, and query params. <code>Provider::build_request</code> creates a <code>Request</code> with method, URL, cloned headers, no body, and no timeout.</p>
+<h2 id="thinking-and-reasoning-content"><a class="header" href="#thinking-and-reasoning-content">Thinking And Reasoning Content</a></h2>
+<p><code>ChatCompletionRequest</code> can carry optional DeepSeek-compatible <code>thinking</code> and <code>reasoning_effort</code> fields. Assistant <code>Message</code> and streaming deltas can also carry <code>reasoning_content</code>. Consumers must preserve that field when a thinking-enabled response includes tool calls, because some providers require it to be passed back with the assistant tool-call message.</p>
 <h2 id="auth"><a class="header" href="#auth">Auth</a></h2>
 <p><code>AuthProvider</code> returns an optional bearer token. <code>BearerAuth</code> stores one token and returns it for each request. Internal <code>add_auth_headers</code> attaches an <code>Authorization: Bearer ...</code> header when a token is available.</p>
 <h2 id="transport"><a class="header" href="#transport">Transport</a></h2>

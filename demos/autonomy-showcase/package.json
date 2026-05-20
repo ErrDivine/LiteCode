@@ -1,0 +1,10 @@
+{
+  "name": "marvis-autonomy-showcase",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "reset": "node scripts/reset-workspace.js",
+    "verify": "node scripts/verify-traps.js"
+  }
+}

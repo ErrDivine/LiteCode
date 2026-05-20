@@ -159,6 +159,7 @@
 <div class="table-wrapper"><table><thead><tr><th>Type</th><th>Purpose</th></tr></thead><tbody>
 <tr><td><code>OpenAiScheduler</code></td><td>Real model scheduler backed by <code>openai-rs::Client</code>.</td></tr>
 <tr><td><code>OpenAiCompatibleConfig</code></td><td>API key and base URL for an OpenAI-compatible provider.</td></tr>
+<tr><td><code>ModelRequestOptions</code></td><td>Thinking mode and optional reasoning effort applied to chat-completion requests.</td></tr>
 <tr><td><code>SyntheticScheduler</code></td><td>Deterministic scheduler used by tests/dev code, not by the VSCode product fallback path.</td></tr>
 </tbody></table>
 </div>
@@ -172,8 +173,10 @@
 <ul>
 <li><code>config.api_key</code></li>
 <li><code>config.base_url</code></li>
+<li><code>config.request_options</code></li>
 </ul>
 <p>and maps client construction errors into <code>KernelError::InvalidRequest</code>.</p>
+<p><code>ModelRequestOptions</code> defaults to <code>auto</code>: DeepSeek-compatible base URLs receive <code>{"thinking":{"type":"disabled"}}</code>, while other providers omit the <code>thinking</code> parameter. Explicit <code>enabled</code>, <code>disabled</code>, and <code>provider_default</code> modes are also supported.</p>
 <h2 id="turn-execution"><a class="header" href="#turn-execution">Turn Execution</a></h2>
 <p><code>run_turn</code> performs this loop:</p>
 <ol>
@@ -183,7 +186,7 @@
 <li>Convert dynamic tool specs into OpenAI function tool definitions.</li>
 <li>Send a streaming <code>chat/completions</code> request.</li>
 <li>Emit <code>AgentMessageDelta</code> events as content deltas arrive.</li>
-<li>Accumulate streamed tool-call deltas by index.</li>
+<li>Accumulate streamed reasoning-content and tool-call deltas by index.</li>
 <li>If there are no tool calls, return final assistant message as <code>SchedulerOutput</code>.</li>
 <li>If there are tool calls, emit tool begin/end events, execute each tool, append tool results to the chat messages, and continue the loop.</li>
 </ol>
@@ -204,6 +207,7 @@
 <li><code>ResponseItem::FunctionCallOutput</code> to a tool result message.</li>
 </ul>
 <p>The scheduler returns function-call and function-call-output response items alongside the final assistant message, so future turns can replay tool history without malformed tool-result-only chat history.</p>
+<p>When a thinking-enabled provider streams <code>reasoning_content</code>, the scheduler stores it on assistant messages. For tool-call assistant messages, the content is stored on the first <code>FunctionCall</code> response item and restored when replaying history.</p>
 <h2 id="syntheticscheduler"><a class="header" href="#syntheticscheduler">SyntheticScheduler</a></h2>
 <p>The synthetic scheduler is used by tests and explicit development code only.</p>
 <p>Behavior:</p>

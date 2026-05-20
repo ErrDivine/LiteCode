@@ -157,8 +157,10 @@
 <p>This index lists every source module and its design responsibility.</p>
 <h2 id="root-binary-crate"><a class="header" href="#root-binary-crate">Root Binary Crate</a></h2>
 <div class="table-wrapper"><table><thead><tr><th>File</th><th>Responsibility</th></tr></thead><tbody>
+<tr><td><code>build.rs</code></td><td>Generates the binary-safe bundled skill catalog from <code>skills/system/**/SKILL.md</code>.</td></tr>
 <tr><td><code>src/main.rs</code></td><td>Binary entrypoint, CLI parsing, mode selection, runtime composition, CLI loop, shared system prompt.</td></tr>
 <tr><td><code>src/autonomy.rs</code></td><td>Autonomous wake-up coordinator, LLM problem segmentation, suggestion cooldowns, PAVE routing, accepted suggestion prompt building.</td></tr>
+<tr><td><code>src/skills.rs</code></td><td>Codex-style skill package loading, bundled skill materialization, resource indexing, and selected skill prompt rendering.</td></tr>
 <tr><td><code>src/skill_mcp.rs</code></td><td>Skill registry, selected skill rendering, stdio MCP discovery, tool qualification, and MCP tool calls.</td></tr>
 <tr><td><code>src/web.rs</code></td><td>Axum web harness, static HTML serving, chat endpoint, SSE event stream, web thread setup.</td></tr>
 <tr><td><code>src/vscode.rs</code></td><td>VSCode stdio server, request dispatch, status store integration, context capsule submission, streamed VSCode events.</td></tr>
@@ -171,6 +173,14 @@
 <tr><td><code>apps/vscode-extension/package.json</code></td><td>Extension manifest, activation events, commands, menus, settings, scripts.</td></tr>
 <tr><td><code>apps/vscode-extension/extension.js</code></td><td>Extension controller, runtime child process client, status collection, webview panel, code actions.</td></tr>
 <tr><td><code>apps/vscode-extension/README.md</code></td><td>Development launch guide.</td></tr>
+</tbody></table>
+</div>
+<h2 id="demo-workspaces"><a class="header" href="#demo-workspaces">Demo Workspaces</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>File</th><th>Responsibility</th></tr></thead><tbody>
+<tr><td><code>demos/autonomy-showcase/launch.sh</code></td><td>Builds the debug runtime and opens VSCode with the Marvis and demo-driver development extensions.</td></tr>
+<tr><td><code>demos/autonomy-showcase/scripts/verify-traps.js</code></td><td>Headless verifier that ensures the clean demo workspace passes and each timed trap produces a failing task signal.</td></tr>
+<tr><td><code>demos/autonomy-showcase/driver-extension/extension.js</code></td><td>Drives the timed autonomy showcase by resetting files, focusing editor context, running tasks, and waiting for Marvis.</td></tr>
+<tr><td><code>demos/autonomy-showcase/workspace</code></td><td>Disposable JavaScript and documentation project used by the showcase traps.</td></tr>
 </tbody></table>
 </div>
 <h2 id="cratesprotocol"><a class="header" href="#cratesprotocol"><code>crates/protocol</code></a></h2>
@@ -215,7 +225,7 @@
 </div>
 <h2 id="cratespave-router"><a class="header" href="#cratespave-router"><code>crates/pave-router</code></a></h2>
 <div class="table-wrapper"><table><thead><tr><th>File</th><th>Responsibility</th></tr></thead><tbody>
-<tr><td><code>crates/pave-router/src/lib.rs</code></td><td>Sparse PAVE vectors, tool access flags, agent profiles, task candidates, route scoring, default profiles.</td></tr>
+<tr><td><code>crates/pave-router/src/lib.rs</code></td><td>Sparse PAVE vectors, tool access flags, generated agent identities, task candidates, and route scoring.</td></tr>
 </tbody></table>
 </div>
 <h2 id="persistence"><a class="header" href="#persistence">Persistence</a></h2>

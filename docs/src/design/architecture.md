@@ -40,7 +40,7 @@ The important dependency direction is one-way:
 | `session-kernel` | `protocol`, `rollout`, `thread-store` | Runtime core. Depends on traits for scheduler and tools. |
 | `scheduler` | `session-kernel`, `protocol`, `openai-rs` | Implements `session-kernel::Scheduler`. |
 | `status` | `serde`, git subprocesses | Deterministic workspace status model. Independent from scheduler. |
-| `pave-router` | `serde`, `status` | Sparse PAVE vectors, agent profiles, task candidates, route scoring. |
+| `pave-router` | `serde`, `status` | Sparse PAVE vectors, generated agent identities, task candidates, route scoring. |
 | `ui-bridge` | `protocol`, `status`, `pave-router` | Surface-specific event/request shapes. |
 | `lite-code` binary | all relevant crates | Composition root. |
 
@@ -54,9 +54,9 @@ The important dependency direction is one-way:
 - `tool_definitions_for_policy(...)` as the dynamic tool surface.
 - `SessionConfig` as the per-thread runtime configuration.
 
-The model endpoint is configured with `MARVIS_API_KEY` and `MARVIS_BASE_URL`. Missing `MARVIS_API_KEY` is a configuration error; the VSCode product does not fall back to a fake model.
+The VSCode model endpoint is configured with `marvis.apiKey` and `marvis.baseUrl`. Missing `marvis.apiKey` is a configuration error; the VSCode product does not fall back to a fake model.
 
-The VSCode autonomy path is also composed in the binary crate. The extension sends status ticks; `src/autonomy.rs` gates unchanged or non-actionable state, calls the OpenAI-compatible chat API for task segmentation, and routes tasks through `pave-router`. The result is a suggest-first decision, not automatic tool execution.
+The VSCode autonomy path is also composed in the binary crate. The extension sends status ticks; `src/autonomy.rs` gates unchanged, busy, ambiguous, or non-actionable state, calls the OpenAI-compatible chat API when status points to a focused next step, prompts the model to proactively infer user intent and select an auto-detected agent, and validates that route through `pave-router`. The result is a suggest-first decision, not automatic tool execution.
 
 Accepted suggestions are then capped to the routed profile approval. `src/skills.rs` loads real Codex-style skill packages, while `src/skill_mcp.rs` resolves the selected profile's skills and stdio MCP servers. Selected skill bodies are injected into the system prompt, and visible local tools/MCP tools are capped by the profile allowlist and the skill package's declared local tool dependencies. Stdio MCP startup requires shell approval because it launches a local process.
 

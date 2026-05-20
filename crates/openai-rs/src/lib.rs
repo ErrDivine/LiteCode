@@ -16,7 +16,8 @@ pub use client::{Client, ClientBuilder};
 pub use error::{ApiError, StreamError, TransportError};
 pub use provider::{Provider, RetryConfig};
 pub use types::chat::{
-    ChatCompletionRequest, ChatCompletionResponse, Message, Role, ToolCall, ToolCallFunction,
+    ChatCompletionRequest, ChatCompletionResponse, Message, Role, ThinkingConfig, ThinkingType,
+    ToolCall, ToolCallFunction,
 };
 pub use types::common::{FinishReason, FunctionDef, ToolDefinition, Usage};
 pub use types::stream::{Delta, FunctionDelta, StreamChoice, StreamChunk, ToolCallDelta};

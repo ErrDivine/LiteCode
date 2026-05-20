@@ -1,0 +1,14 @@
+{
+  "name": "marvis-autonomy-showcase-workspace",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node tests/orderTotals.test.js && node tests/discountRules.test.js && node tests/shippingLabels.test.js && node scripts/checkDashboardA11y.js && node scripts/checkReleaseNotes.js",
+    "test:orders": "node tests/orderTotals.test.js",
+    "test:discounts": "node tests/discountRules.test.js",
+    "test:shipping": "node tests/shippingLabels.test.js",
+    "check:dashboard": "node scripts/checkDashboardA11y.js",
+    "check:release-notes": "node scripts/checkReleaseNotes.js"
+  }
+}

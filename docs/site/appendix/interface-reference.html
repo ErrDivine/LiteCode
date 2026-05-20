@@ -298,7 +298,7 @@
 <h2 id="ui-bridge-interfaces"><a class="header" href="#ui-bridge-interfaces">UI Bridge Interfaces</a></h2>
 <div class="table-wrapper"><table><thead><tr><th>Interface</th><th>Kind</th><th>Purpose</th></tr></thead><tbody>
 <tr><td><code>VscodeRequestEnvelope</code></td><td>struct</td><td>Stdio request envelope.</td></tr>
-<tr><td><code>VscodeRequest</code></td><td>enum</td><td>Initialize, status update, command result, prompt, shutdown.</td></tr>
+<tr><td><code>VscodeRequest</code></td><td>enum</td><td>Initialize, status update, command result, prompt, autonomy tick, suggestion accept/dismiss, shutdown. Initialize carries model, API key, base URL, thinking mode, reasoning effort, and max tokens; agent identities are generated inside the runtime.</td></tr>
 <tr><td><code>VscodeResponseEnvelope</code></td><td>struct</td><td>Stdio response envelope.</td></tr>
 <tr><td><code>VscodeResponse</code></td><td>enum</td><td>Ready, status report, agent event, complete, error, shutdown complete.</td></tr>
 <tr><td><code>VscodeRuntimeEvent</code></td><td>enum</td><td>Surface event for VSCode.</td></tr>

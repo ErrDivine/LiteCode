@@ -17,7 +17,7 @@
 | `error.rs` | Transport, stream, and API error enums. |
 | `chat/mod.rs` | Chat namespace. |
 | `chat/completions.rs` | Chat completion create and create_stream APIs. |
-| `types/chat.rs` | Chat request, message, role, tool call, and response types. |
+| `types/chat.rs` | Chat request, thinking options, message, role, tool call, and response types. |
 | `types/common.rs` | Tool definition, function definition, usage, finish reason. |
 | `types/stream.rs` | Streaming chunk and delta types. |
 
@@ -30,7 +30,7 @@ The crate root re-exports:
 - `Client`, `ClientBuilder`
 - `ApiError`, `StreamError`, `TransportError`
 - `Provider`, `RetryConfig`
-- chat request/response/message/tool types
+- chat request/response/message/tool types, including DeepSeek-style `thinking` and `reasoning_content`
 - common usage and finish-reason types
 - streaming delta types
 
@@ -63,6 +63,10 @@ Builder methods:
 - stream idle timeout
 
 `Provider::url_for_path` joins base URL, path, and query params. `Provider::build_request` creates a `Request` with method, URL, cloned headers, no body, and no timeout.
+
+## Thinking And Reasoning Content
+
+`ChatCompletionRequest` can carry optional DeepSeek-compatible `thinking` and `reasoning_effort` fields. Assistant `Message` and streaming deltas can also carry `reasoning_content`. Consumers must preserve that field when a thinking-enabled response includes tool calls, because some providers require it to be passed back with the assistant tool-call message.
 
 ## Auth
 

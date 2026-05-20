@@ -90,7 +90,6 @@ pub struct StatusSegment {
     pub diagnostics: Vec<String>,
     pub token_estimate: usize,
     pub freshness: Freshness,
-    pub confidence: f32,
     pub importance: f32,
     pub risk_level: RiskLevel,
 }
@@ -335,7 +334,6 @@ impl CodebaseStatus {
 pub struct ProactiveSuggestion {
     pub message: String,
     pub action_type: String,
-    pub confidence: f32,
     #[serde(default)]
     pub related_segment_ids: Vec<SegmentId>,
 }
@@ -486,7 +484,6 @@ impl StatusStore {
             } else {
                 "suggest".to_string()
             },
-            confidence: signal.score,
             related_segment_ids: self
                 .status
                 .segments
@@ -656,7 +653,6 @@ fn user_focus_segment(status: &CodebaseStatus) -> Option<StatusSegment> {
             .map(|cursor| estimate_tokens(&cursor.surrounding_text))
             .unwrap_or(64),
         freshness: Freshness::Hot,
-        confidence: 0.98,
         importance: 0.95,
         risk_level: RiskLevel::Low,
     })
@@ -706,7 +702,6 @@ fn diagnostic_segments(status: &CodebaseStatus) -> Vec<StatusSegment> {
                     .map(|diagnostic| estimate_tokens(&diagnostic.message))
                     .sum(),
                 freshness: Freshness::Hot,
-                confidence: 0.95,
                 importance: if errors > 0 { 0.9 } else { 0.7 },
                 risk_level: if errors > 0 {
                     RiskLevel::Medium
@@ -741,7 +736,6 @@ fn recent_diff_segment(status: &CodebaseStatus) -> Option<StatusSegment> {
         diagnostics: Vec::new(),
         token_estimate: 128,
         freshness: Freshness::Hot,
-        confidence: 0.95,
         importance: 0.8,
         risk_level: RiskLevel::Medium,
     })
@@ -774,7 +768,6 @@ fn command_failure_segments(status: &CodebaseStatus) -> Vec<StatusSegment> {
                 diagnostics: Vec::new(),
                 token_estimate: estimate_tokens(&command.output_tail),
                 freshness: Freshness::Hot,
-                confidence: 0.9,
                 importance: if matches!(kind, SegmentKind::FailingTest) {
                     0.88
                 } else {
@@ -825,7 +818,6 @@ fn risk_segment(status: &CodebaseStatus) -> Option<StatusSegment> {
         diagnostics: Vec::new(),
         token_estimate: 96,
         freshness: Freshness::Hot,
-        confidence: 0.85,
         importance: 0.72,
         risk_level,
     })

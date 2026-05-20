@@ -132,6 +132,8 @@ pub struct TaskCandidate {
     pub id: String,
     pub title: String,
     pub prompt: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent_id: Option<String>,
     #[serde(default)]
     pub evidence: Vec<String>,
     #[serde(default)]
@@ -143,7 +145,6 @@ pub struct TaskCandidate {
     pub desired_tools: Vec<String>,
     #[serde(default)]
     pub pave: PaveVector,
-    pub confidence: f32,
 }
 
 impl TaskCandidate {
@@ -151,9 +152,12 @@ impl TaskCandidate {
         self.id = self.id.trim().to_string();
         self.title = self.title.trim().to_string();
         self.prompt = self.prompt.trim().to_string();
+        self.agent_id = self
+            .agent_id
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty());
         self.evidence = normalize_string_list(self.evidence);
         self.desired_tools = normalize_string_list(self.desired_tools);
-        self.confidence = self.confidence.clamp(0.0, 1.0);
         if self.id.is_empty() || self.title.is_empty() || self.prompt.is_empty() {
             return None;
         }
@@ -166,14 +170,15 @@ pub struct RouteDecision {
     pub suggestion_id: String,
     pub task: TaskCandidate,
     pub agent: AgentProfile,
+    #[serde(skip)]
     pub cosine_score: f32,
+    #[serde(skip)]
     pub final_score: f32,
     pub reason: String,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
 pub struct RouterConfig {
-    pub minimum_task_confidence: f32,
     pub minimum_route_score: f32,
     pub tool_match_bonus: f32,
     pub unavailable_tool_penalty: f32,
@@ -183,8 +188,7 @@ pub struct RouterConfig {
 impl Default for RouterConfig {
     fn default() -> Self {
         Self {
-            minimum_task_confidence: 0.55,
-            minimum_route_score: 0.45,
+            minimum_route_score: 0.0,
             tool_match_bonus: 0.08,
             unavailable_tool_penalty: 0.16,
             risk_mismatch_penalty: 0.12,
@@ -220,9 +224,24 @@ impl Router {
     pub fn select(&self, tasks: Vec<TaskCandidate>) -> Option<RouteDecision> {
         let mut best: Option<RouteDecision> = None;
         for task in tasks.into_iter().filter_map(TaskCandidate::normalized) {
-            if task.confidence < self.config.minimum_task_confidence {
+            if let Some(agent_id) = task.agent_id.as_deref() {
+                if let Some(profile) = self.profiles.iter().find(|profile| profile.id == agent_id)
+                    && let Some(decision) = self.score_with_reason(
+                        &task,
+                        profile,
+                        format!("selected by LLM agent choice `{agent_id}`"),
+                    )
+                {
+                    let is_better = best
+                        .as_ref()
+                        .is_none_or(|current| decision.final_score > current.final_score);
+                    if is_better {
+                        best = Some(decision);
+                    }
+                }
                 continue;
             }
+
             for profile in &self.profiles {
                 if let Some(decision) = self.score(&task, profile) {
                     let is_better = best
@@ -238,6 +257,19 @@ impl Router {
     }
 
     fn score(&self, task: &TaskCandidate, profile: &AgentProfile) -> Option<RouteDecision> {
+        self.score_with_reason(
+            task,
+            profile,
+            "matched by PAVE routing with declared tool and risk constraints".to_string(),
+        )
+    }
+
+    fn score_with_reason(
+        &self,
+        task: &TaskCandidate,
+        profile: &AgentProfile,
+        reason: String,
+    ) -> Option<RouteDecision> {
         if !profile.default_approval.can_support_task(task) {
             return None;
         }
@@ -281,9 +313,7 @@ impl Router {
             agent: profile.clone(),
             cosine_score,
             final_score,
-            reason: format!(
-                "cosine={cosine_score:.2}, tool_bonus={tool_match_bonus:.2}, unavailable_tool_penalty={unavailable_tool_penalty:.2}, risk_penalty={risk_mismatch_penalty:.2}"
-            ),
+            reason,
         })
     }
 }
@@ -297,7 +327,8 @@ pub fn normalize_profiles(profiles: Vec<AgentProfile>) -> Vec<AgentProfile> {
         .collect()
 }
 
-pub fn default_agent_profiles(default_model: &str) -> Vec<AgentProfile> {
+#[cfg(test)]
+fn test_agent_profiles(default_model: &str) -> Vec<AgentProfile> {
     vec![
         AgentProfile {
             id: "rust-diagnostic-repair".to_string(),
@@ -434,41 +465,61 @@ mod tests {
 
     #[test]
     fn router_selects_best_matching_profile() {
-        let profiles = default_agent_profiles("gpt-test");
+        let profiles = test_agent_profiles("gpt-test");
         let router = Router::new(profiles, RouterConfig::default()).unwrap();
         let decision = router
             .select(vec![TaskCandidate {
                 id: "task-1".to_string(),
                 title: "Fix Rust diagnostic".to_string(),
                 prompt: "Fix the compiler error.".to_string(),
+                agent_id: None,
                 evidence: vec!["diagnostic".to_string()],
                 files: vec![PathBuf::from("src/lib.rs")],
                 risk_level: RiskLevel::Medium,
                 needs_write: true,
                 desired_tools: vec!["apply_patch".to_string(), "run_test".to_string()],
                 pave: PaveVector::new([("rust", 1.0), ("diagnostics", 1.0), ("patch", 1.0)]),
-                confidence: 0.9,
             }])
             .unwrap();
         assert_eq!(decision.agent.id, "rust-diagnostic-repair");
     }
 
     #[test]
-    fn router_rejects_low_confidence_tasks() {
-        let router =
-            Router::new(default_agent_profiles("gpt-test"), RouterConfig::default()).unwrap();
+    fn router_routes_llm_tasks_without_extra_task_gate() {
+        let router = Router::new(test_agent_profiles("gpt-test"), RouterConfig::default()).unwrap();
         let decision = router.select(vec![TaskCandidate {
             id: "task-1".to_string(),
             title: "Maybe".to_string(),
             prompt: "Maybe do something.".to_string(),
+            agent_id: None,
             evidence: Vec::new(),
             files: Vec::new(),
             risk_level: RiskLevel::Low,
             needs_write: false,
             desired_tools: Vec::new(),
             pave: PaveVector::new([("explanation", 1.0)]),
-            confidence: 0.2,
         }]);
-        assert!(decision.is_none());
+        assert!(decision.is_some());
+    }
+
+    #[test]
+    fn router_prefers_llm_selected_agent_when_compatible() {
+        let router = Router::new(test_agent_profiles("gpt-test"), RouterConfig::default()).unwrap();
+        let decision = router
+            .select(vec![TaskCandidate {
+                id: "task-1".to_string(),
+                title: "Explain repo".to_string(),
+                prompt: "Explain the focused area.".to_string(),
+                agent_id: Some("repo-explainer".to_string()),
+                evidence: Vec::new(),
+                files: Vec::new(),
+                risk_level: RiskLevel::Low,
+                needs_write: false,
+                desired_tools: Vec::new(),
+                pave: PaveVector::new([("rust", 1.0), ("patch", 1.0)]),
+            }])
+            .unwrap();
+        assert_eq!(decision.agent.id, "repo-explainer");
+        assert!(decision.reason.contains("selected by LLM agent choice"));
     }
 }

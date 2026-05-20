@@ -14,6 +14,7 @@ pub struct StreamChoice {
 #[derive(Debug, Deserialize)]
 pub struct Delta {
     pub content: Option<String>,
+    pub reasoning_content: Option<String>,
     pub tool_calls: Option<Vec<ToolCallDelta>>,
 }
 

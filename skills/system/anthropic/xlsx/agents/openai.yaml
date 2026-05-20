@@ -1,0 +1,23 @@
+capabilities:
+  - read_file
+  - read_many_files
+  - search_files
+  - find_files
+  - list_directory
+  - write_file
+  - edit_file
+  - apply_patch
+  - shell
+  - run_skill_script
+  - list_rollbacks
+  - restore_rollback
+  - git_diff
+  - git_status
+  - list_skills
+  - list_skill_resources
+  - read_skill_resource
+interface:
+  display_name: XLSX
+  short_description: Create, inspect, and repair spreadsheets.
+policy:
+  allow_implicit_invocation: true

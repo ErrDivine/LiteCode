@@ -167,7 +167,7 @@
 <ul>
 <li>Parse CLI flags.</li>
 <li>Select VSCode stdio, web, or CLI mode.</li>
-<li>Read <code>MARVIS_API_KEY</code> and optional <code>MARVIS_BASE_URL</code>.</li>
+<li>Read OpenAI-compatible provider configuration.</li>
 <li>Build <code>OpenAiScheduler</code>, <code>LocalToolExecutor</code>, and <code>ThreadManager</code>.</li>
 <li>Start a thread with policy-filtered local tool definitions.</li>
 <li>Consume runtime events and adapt them for the selected UI.</li>
@@ -254,7 +254,7 @@
 <li>base URL</li>
 <li>max tokens</li>
 <li>next process id</li>
-<li>configured agent profiles</li>
+<li>auto-detected agent profiles</li>
 <li>autonomy coordinator</li>
 </ul>
 <h3 id="request-handling"><a class="header" href="#request-handling">Request Handling</a></h3>
@@ -262,7 +262,8 @@
 <ul>
 <li>Sets workspace root, model, and max tokens.</li>
 <li>Creates a new <code>StatusStore</code>.</li>
-<li>Loads <code>MARVIS_API_KEY</code> and base URL.</li>
+<li>Loads <code>marvis.apiKey</code> and base URL from the initialize payload.</li>
+<li>Loads bundled and workspace skills, then generates same-model agent identities from skills and built-in toolsets.</li>
 <li>Returns <code>Ready</code>.</li>
 </ul>
 <p><code>StatusUpdate</code>:</p>
@@ -291,9 +292,10 @@
 <p><code>AutonomyTick</code>:</p>
 <ul>
 <li>Updates VSCode status and git state.</li>
-<li>Skips unchanged, non-actionable, or in-flight state.</li>
-<li>Calls the OpenAI-compatible model for strict JSON task segmentation.</li>
-<li>Routes task candidates against configured agent profiles with PAVE cosine scoring.</li>
+<li>Skips in-flight, unchanged, busy, ambiguous, or merely dirty/risky state.</li>
+<li>Calls the OpenAI-compatible model for strict JSON task segmentation when VSCode status points to a focused, useful next step; the segmenter prompt biases toward specific suggest-first action rather than waiting for perfect certainty.</li>
+<li>Requires the segmenter to choose an agent id from the auto-detected skill/toolset agents before permission is requested.</li>
+<li>Uses PAVE matching only as a compatibility fallback when older task payloads do not include an agent id.</li>
 <li>Returns <code>AutonomyDecision::Idle</code>, <code>Suggest</code>, or <code>Suppressed</code>.</li>
 </ul>
 <p><code>RunSuggestedTask</code>:</p>
@@ -302,7 +304,7 @@
 <li>Caps the request approval to the stored routed approval.</li>
 <li>Resolves the selected agent's skills and MCP servers.</li>
 <li>Adds selected skill instructions to the system prompt.</li>
-<li>Filters visible tools by runtime policy, selected skill package local-tool dependencies, and the agent tool allowlist.</li>
+<li>Filters visible tools by runtime policy, selected skill package local-tool dependencies, and the generated agent tool allowlist.</li>
 <li>Exposes discovered stdio MCP tools only when MCP discovery succeeds.</li>
 <li>Runs the existing bounded VSCode prompt flow.</li>
 </ul>
@@ -317,7 +319,7 @@
 <li>Stops the stdio loop.</li>
 </ul>
 <h3 id="vscode-system-prompt"><a class="header" href="#vscode-system-prompt">VSCode System Prompt</a></h3>
-<p><code>VSCODE_SYSTEM_PROMPT</code> tells the model to treat VSCode status as data, pay attention to active editor, cursor, diagnostics, command failures, and git state, and to be cautious with risky edits.</p>
+<p><code>VSCODE_SYSTEM_PROMPT</code> tells the model to treat VSCode status as data, pay attention to active editor, cursor, diagnostics, command failures, and git state, infer the immediate user intent implied by that status, stay focused on that intent, use no more than 15 tool calls in one turn, and be cautious with risky edits.</p>
 <h2 id="design-notes"><a class="header" href="#design-notes">Design Notes</a></h2>
 <p>The binary crate is currently the composition root and tool owner. That is acceptable for the current size, but moving <code>src/tools.rs</code> into a tool-gateway crate would make the runtime boundary cleaner.</p>
 

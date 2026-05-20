@@ -13,11 +13,11 @@
 
 | Variant | Payload |
 | --- | --- |
-| `Initialize` | workspace root, optional model, optional base URL, optional max tokens, agent profiles |
+| `Initialize` | workspace root, optional model, optional API key, optional base URL, optional thinking mode, optional reasoning effort, optional max tokens |
 | `StatusUpdate` | `VscodeStatus` |
 | `CommandResult` | `CommandResult` |
 | `UserPrompt` | prompt plus optional `VscodeStatus` and per-prompt approval grants |
-| `AutonomyTick` | `VscodeStatus`, trigger, and optional current agent profiles |
+| `AutonomyTick` | `VscodeStatus` and trigger. Legacy `agent_profiles` payloads are accepted but ignored by the runtime. |
 | `RunSuggestedTask` | suggestion id plus requested approval grants; runtime caps them to the stored route approval |
 | `DismissSuggestion` | suggestion id |
 | `Shutdown` | no payload |
@@ -49,7 +49,7 @@ Constructors:
 
 The `Ready` response includes workspace root, model, base URL, and initial status report.
 
-`AutonomyDecision` is one of `idle`, `suggest`, or `suppressed`. A suggestion includes the selected route, task, agent profile, PAVE scores, and required approval flags.
+`AutonomyDecision` is one of `idle`, `suggest`, or `suppressed`. A suggestion includes the selected route, task, agent profile, route explanation, and required approval flags.
 
 ## VSCode Runtime Events
 

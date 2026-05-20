@@ -1,0 +1,22 @@
+capabilities:
+  - read_file
+  - read_many_files
+  - search_files
+  - find_files
+  - list_directory
+  - list_symbols
+  - write_file
+  - edit_file
+  - apply_patch
+  - list_rollbacks
+  - restore_rollback
+  - git_diff
+  - git_status
+  - list_skills
+  - list_skill_resources
+  - read_skill_resource
+interface:
+  display_name: Algorithmic Art
+  short_description: Create seeded p5.js generative art artifacts.
+policy:
+  allow_implicit_invocation: true

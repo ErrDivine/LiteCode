@@ -1,0 +1,25 @@
+capabilities:
+  - read_file
+  - read_many_files
+  - search_files
+  - find_files
+  - list_directory
+  - list_symbols
+  - write_file
+  - edit_file
+  - apply_patch
+  - shell
+  - run_formatter
+  - list_rollbacks
+  - restore_rollback
+  - git_diff
+  - git_status
+  - list_skills
+  - list_skill_resources
+  - read_skill_resource
+interface:
+  display_name: "Learnware Code Style"
+  short_description: "Format Learnware changes before commit"
+  default_prompt: "Use $learnware-code-style to restyle my changed files before I commit."
+policy:
+  allow_implicit_invocation: true

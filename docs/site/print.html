@@ -164,6 +164,7 @@
 <tr><td><code>apps/vscode-extension</code></td><td>VSCode product shell. It collects editor context and speaks newline-delimited JSON to the Rust binary.</td></tr>
 <tr><td><code>src/main.rs</code></td><td>Binary entrypoint. It selects CLI, web, or VSCode stdio mode.</td></tr>
 <tr><td><code>src/tools.rs</code></td><td>Current local tool executor for shell, file read/write/edit, directory listing, search, glob discovery, safe test/build helpers, and runtime policy gates.</td></tr>
+<tr><td><code>src/skills.rs</code></td><td>Codex-style skill package loading, bundled skill materialization, and resource indexing.</td></tr>
 <tr><td><code>src/skill_mcp.rs</code></td><td>Skill registry, selected skill injection, stdio MCP discovery, and MCP tool execution.</td></tr>
 <tr><td><code>src/web.rs</code></td><td>Temporary HTTP/SSE web harness.</td></tr>
 <tr><td><code>src/vscode.rs</code></td><td>Runtime side of the VSCode stdio bridge.</td></tr>
@@ -172,7 +173,7 @@
 <tr><td><code>crates/scheduler</code></td><td>Model turn execution against OpenAI-compatible chat completions plus a synthetic scheduler used only by tests/dev code.</td></tr>
 <tr><td><code>crates/openai-rs</code></td><td>Reusable OpenAI-compatible HTTP and streaming client.</td></tr>
 <tr><td><code>crates/status</code></td><td>VSCode/codebase status model, deterministic segments, stuckness detection, git state, and context capsules.</td></tr>
-<tr><td><code>crates/pave-router</code></td><td>Rust JSON PAVE vectors, agent profiles, task candidates, and route scoring.</td></tr>
+<tr><td><code>crates/pave-router</code></td><td>Rust JSON PAVE vectors, generated agent identities, task candidates, and route scoring.</td></tr>
 <tr><td><code>crates/ui-bridge</code></td><td>Adapters from kernel events into CLI, web SSE, and VSCode runtime event shapes.</td></tr>
 <tr><td><code>crates/rollout</code></td><td>JSONL session recording and listing.</td></tr>
 <tr><td><code>crates/thread-store</code></td><td>Storage-neutral thread persistence interface with local JSONL history and sidecar metadata.</td></tr>
@@ -181,7 +182,7 @@
 </tbody></table>
 </div>
 <h2 id="reading-path"><a class="header" href="#reading-path">Reading Path</a></h2>
-<p>Start with <a href="design/overview.html">Product And Runtime Overview</a>, then <a href="design/architecture.html">Architecture</a>, then <a href="design/flows.html">Runtime Flows</a>. After that, each crate page can be read independently.</p>
+<p>Start with <a href="quick-start.html">Quick Start</a> if you want to run Marvis in VSCode. Use <a href="apps/autonomy-showcase.html">Autonomy Showcase Demo</a> when you need a screen-recordable walkthrough of the autonomous scheduler. For implementation context, read <a href="design/overview.html">Product And Runtime Overview</a>, then <a href="design/architecture.html">Architecture</a>, then <a href="design/flows.html">Runtime Flows</a>. After that, each crate page can be read independently.</p>
 <p>For interface-level lookup, use:</p>
 <ul>
 <li><a href="appendix/module-index.html">Module Index</a> for file-by-file responsibilities.</li>
@@ -192,6 +193,94 @@
 <pre><code class="language-bash">target/mdbook-bin/bin/mdbook build docs
 </code></pre>
 <p>The generated site is written to <code>docs/site</code>. Open <code>docs/site/index.html</code> in a browser or serve <code>docs/site</code> from any static file server.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="quick-start"><a class="header" href="#quick-start">Quick Start</a></h1>
+<p>This guide gets Marvis running in VSCode against an OpenAI-compatible model provider.</p>
+<h2 id="prerequisites"><a class="header" href="#prerequisites">Prerequisites</a></h2>
+<ul>
+<li>Rust toolchain with <code>cargo</code>.</li>
+<li>VSCode.</li>
+<li>Node.js for the extension development check.</li>
+<li>An API key for an OpenAI-compatible chat completions endpoint.</li>
+</ul>
+<p>Marvis uses one provider configuration for every VSCode agent. Configure it in VSCode Settings:</p>
+<pre><code class="language-json">{
+  "marvis.apiKey": "...",
+  "marvis.baseUrl": "https://api.openai.com/v1",
+  "marvis.thinkingMode": "auto"
+}
+</code></pre>
+<p><code>marvis.baseUrl</code> is optional when using the OpenAI default. For other compatible providers, set it to the provider's <code>/v1</code> base URL.</p>
+<p>Put <code>marvis.apiKey</code> in User or Machine Settings. Do not commit it in a project's <code>.vscode/settings.json</code>.</p>
+<h2 id="build-the-runtime"><a class="header" href="#build-the-runtime">Build The Runtime</a></h2>
+<p>From the repository root:</p>
+<pre><code class="language-bash">cargo build
+</code></pre>
+<p>The VSCode extension can use <code>target/debug/lite-code</code> while developing this repository. Published extension packages should include a runtime binary under <code>apps/vscode-extension/bin/</code> or configure <code>marvis.runtimePath</code>.</p>
+<h2 id="launch-the-vscode-extension"><a class="header" href="#launch-the-vscode-extension">Launch The VSCode Extension</a></h2>
+<ol>
+<li>Open <code>apps/vscode-extension</code> in VSCode.</li>
+<li>Press <code>F5</code> to start an Extension Development Host.</li>
+<li>In the development host, open the workspace you want Marvis to inspect.</li>
+<li>Run <code>Marvis: Start Marvis</code> from the command palette.</li>
+</ol>
+<p>The extension starts:</p>
+<pre><code class="language-bash">lite-code --vscode-stdio
+</code></pre>
+<p>It sends editor state, cursor context, diagnostics, task status, debug status, and recorded command results to the Rust runtime.</p>
+<h2 id="basic-use"><a class="header" href="#basic-use">Basic Use</a></h2>
+<p>Use these commands first:</p>
+<div class="table-wrapper"><table><thead><tr><th>Command</th><th>Use</th></tr></thead><tbody>
+<tr><td><code>Marvis: Start Marvis</code></td><td>Start the runtime and show the status panel.</td></tr>
+<tr><td><code>Marvis: Ask Marvis</code></td><td>Ask a free-form question about the current workspace.</td></tr>
+<tr><td><code>Marvis: Ask About Selection</code></td><td>Ask using the selected code as context.</td></tr>
+<tr><td><code>Marvis: Fix Near Cursor</code></td><td>Ask Marvis to inspect and fix the nearby code.</td></tr>
+<tr><td><code>Marvis: Explain Diagnostic</code></td><td>Explain the selected VSCode problem.</td></tr>
+<tr><td><code>Marvis: Check Autonomy Now</code></td><td>Trigger an immediate autonomous status check.</td></tr>
+</tbody></table>
+</div>
+<p>Marvis does not run autonomous edits or shell commands from a status tick. Autonomy is suggest-first: the runtime segments the current codebase and IDE state, routes a task through PAVE, and shows a suggestion. Work only starts after you accept the suggestion.</p>
+<h2 id="run-the-demo"><a class="header" href="#run-the-demo">Run The Demo</a></h2>
+<p>To record the autonomous scheduler behavior, use the showcase workspace:</p>
+<pre><code class="language-bash">./demos/autonomy-showcase/launch.sh
+</code></pre>
+<p>It opens VSCode with Marvis and a demo driver extension, introduces timed traps in a disposable workspace, and waits for the normal heartbeat/debounce path to suggest work. See <a href="apps/autonomy-showcase.html">Autonomy Showcase Demo</a> for the recording flow.</p>
+<h2 id="recommended-settings"><a class="header" href="#recommended-settings">Recommended Settings</a></h2>
+<p>Set these in VSCode when the defaults do not match your environment:</p>
+<pre><code class="language-json">{
+  "marvis.runtimePath": "/absolute/path/to/lite-code",
+  "marvis.apiKey": "...",
+  "marvis.model": "gpt-4.1-mini",
+  "marvis.baseUrl": "https://api.openai.com/v1",
+  "marvis.thinkingMode": "auto",
+  "marvis.reasoningEffort": "",
+  "marvis.maxTokens": 4096,
+  "marvis.autonomy.enabled": true,
+  "marvis.autonomy.idleDelayMs": 3000,
+  "marvis.autonomy.heartbeatIntervalMs": 30000
+}
+</code></pre>
+<p>Agents are generated automatically from bundled skills, workspace skills, and built-in toolsets. They all use the shared model/provider settings above; to add a project-specific agent identity, add a <code>SKILL.md</code> package under <code>.marvis/skills</code> or <code>.agents/skills</code>.</p>
+<p>For DeepSeek-compatible endpoints, <code>auto</code> sends <code>{"thinking":{"type":"disabled"}}</code> by default. Set <code>marvis.thinkingMode</code> to <code>enabled</code> and optionally set <code>marvis.reasoningEffort</code> to <code>low</code>, <code>medium</code>, or <code>high</code> only when you want provider thinking output.</p>
+<h2 id="skills-and-mcp"><a class="header" href="#skills-and-mcp">Skills And MCP</a></h2>
+<p>Bundled Marvis, Anthropic, and local Codex skills are available automatically. Workspace skills can be added under:</p>
+<pre><code class="language-text">.marvis/skills/**/SKILL.md
+.agents/skills/**/SKILL.md
+</code></pre>
+<p>MCP servers are configured from:</p>
+<pre><code class="language-text">.marvis/mcp.json
+.mcp.json
+</code></pre>
+<p>Skills package reusable instructions, references, and scripts. MCP servers expose external tools. Both are gated by the selected agent profile and the runtime tool policy.</p>
+<h2 id="verify-the-workspace"><a class="header" href="#verify-the-workspace">Verify The Workspace</a></h2>
+<p>Run the main checks before publishing changes:</p>
+<pre><code class="language-bash">cargo fmt --all -- --check
+cargo check --workspace --locked
+cargo test --workspace --locked
+cargo clippy --workspace --locked -- -D warnings
+npm --prefix apps/vscode-extension run check
+target/mdbook-bin/bin/mdbook build docs
+</code></pre>
+<p>If <code>marvis.apiKey</code> is missing, real VSCode model turns fail with a configuration error. The production runtime does not use a fake model fallback.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="product-and-runtime-overview"><a class="header" href="#product-and-runtime-overview">Product And Runtime Overview</a></h1>
 <p>Marvis is organized as a local agent runtime with a VSCode shell. The extension owns IDE-native observation and UI affordances; Rust owns the model/tool loop, status normalization, history, and cross-surface event contracts.</p>
 <h2 id="product-shape"><a class="header" href="#product-shape">Product Shape</a></h2>
@@ -207,7 +296,7 @@
 <tr><td>Thread runtime</td><td><code>crates/session-kernel</code></td><td>Owns submissions, active turns, cancellation, history, event emission, and persistence integration.</td></tr>
 <tr><td>Scheduler</td><td><code>crates/scheduler</code></td><td>Converts thread state into model chat messages, streams deltas, executes tool calls, and returns final response items.</td></tr>
 <tr><td>UI bridge</td><td><code>crates/ui-bridge</code></td><td>Converts kernel events into CLI, web, and VSCode-facing formats.</td></tr>
-<tr><td>PAVE router</td><td><code>crates/pave-router</code></td><td>Scores LLM-segmented tasks against configured agent profiles.</td></tr>
+<tr><td>PAVE router</td><td><code>crates/pave-router</code></td><td>Scores LLM-segmented tasks against runtime-generated skill/toolset agent identities.</td></tr>
 </tbody></table>
 </div>
 <p>Everything else supports these contracts:</p>
@@ -236,7 +325,7 @@
 <li>Thread resume and fork basics.</li>
 <li>VSCode status ingestion.</li>
 <li>Autonomous VSCode wake-up checks with suggest-first PAVE routed tasks.</li>
-<li>OpenAI-compatible provider configuration through <code>MARVIS_API_KEY</code> and <code>MARVIS_BASE_URL</code>.</li>
+<li>OpenAI-compatible provider configuration through VSCode settings for the VSCode product and environment variables for CLI/web modes.</li>
 </ul>
 <p>Areas that are intentionally still simple:</p>
 <ul>
@@ -277,7 +366,7 @@ Web HTTP/SSE    -&gt; session-kernel -&gt; scheduler -&gt; tools -&gt; rollout
 <tr><td><code>session-kernel</code></td><td><code>protocol</code>, <code>rollout</code>, <code>thread-store</code></td><td>Runtime core. Depends on traits for scheduler and tools.</td></tr>
 <tr><td><code>scheduler</code></td><td><code>session-kernel</code>, <code>protocol</code>, <code>openai-rs</code></td><td>Implements <code>session-kernel::Scheduler</code>.</td></tr>
 <tr><td><code>status</code></td><td><code>serde</code>, git subprocesses</td><td>Deterministic workspace status model. Independent from scheduler.</td></tr>
-<tr><td><code>pave-router</code></td><td><code>serde</code>, <code>status</code></td><td>Sparse PAVE vectors, agent profiles, task candidates, route scoring.</td></tr>
+<tr><td><code>pave-router</code></td><td><code>serde</code>, <code>status</code></td><td>Sparse PAVE vectors, generated agent identities, task candidates, route scoring.</td></tr>
 <tr><td><code>ui-bridge</code></td><td><code>protocol</code>, <code>status</code>, <code>pave-router</code></td><td>Surface-specific event/request shapes.</td></tr>
 <tr><td><code>lite-code</code> binary</td><td>all relevant crates</td><td>Composition root.</td></tr>
 </tbody></table>
@@ -291,8 +380,8 @@ Web HTTP/SSE    -&gt; session-kernel -&gt; scheduler -&gt; tools -&gt; rollout
 <li><code>tool_definitions_for_policy(...)</code> as the dynamic tool surface.</li>
 <li><code>SessionConfig</code> as the per-thread runtime configuration.</li>
 </ul>
-<p>The model endpoint is configured with <code>MARVIS_API_KEY</code> and <code>MARVIS_BASE_URL</code>. Missing <code>MARVIS_API_KEY</code> is a configuration error; the VSCode product does not fall back to a fake model.</p>
-<p>The VSCode autonomy path is also composed in the binary crate. The extension sends status ticks; <code>src/autonomy.rs</code> gates unchanged or non-actionable state, calls the OpenAI-compatible chat API for task segmentation, and routes tasks through <code>pave-router</code>. The result is a suggest-first decision, not automatic tool execution.</p>
+<p>The VSCode model endpoint is configured with <code>marvis.apiKey</code> and <code>marvis.baseUrl</code>. Missing <code>marvis.apiKey</code> is a configuration error; the VSCode product does not fall back to a fake model.</p>
+<p>The VSCode autonomy path is also composed in the binary crate. The extension sends status ticks; <code>src/autonomy.rs</code> gates unchanged, busy, ambiguous, or non-actionable state, calls the OpenAI-compatible chat API when status points to a focused next step, prompts the model to proactively infer user intent and select an auto-detected agent, and validates that route through <code>pave-router</code>. The result is a suggest-first decision, not automatic tool execution.</p>
 <p>Accepted suggestions are then capped to the routed profile approval. <code>src/skills.rs</code> loads real Codex-style skill packages, while <code>src/skill_mcp.rs</code> resolves the selected profile's skills and stdio MCP servers. Selected skill bodies are injected into the system prompt, and visible local tools/MCP tools are capped by the profile allowlist and the skill package's declared local tool dependencies. Stdio MCP startup requires shell approval because it launches a local process.</p>
 <h2 id="runtime-boundaries"><a class="header" href="#runtime-boundaries">Runtime Boundaries</a></h2>
 <h3 id="protocol-boundary"><a class="header" href="#protocol-boundary">Protocol Boundary</a></h3>
@@ -376,12 +465,12 @@ Web HTTP/SSE    -&gt; session-kernel -&gt; scheduler -&gt; tools -&gt; rollout
   -&gt; tool_spec_to_openai
   -&gt; streaming chat/completions
   -&gt; emit AgentMessageDelta events
-  -&gt; accumulate tool call deltas
+  -&gt; accumulate reasoning-content and tool call deltas
   -&gt; execute each tool call
   -&gt; append tool results to model messages
   -&gt; repeat until no tool calls or finish_reason == stop
 </code></pre>
-<p>Tool calls are persisted as <code>ResponseItem::FunctionCall</code> values followed by <code>ResponseItem::FunctionCallOutput</code> values. The scheduler still emits tool begin/end events for live UI, and later turns replay persisted tool-call history as valid assistant tool-call plus tool-result chat messages.</p>
+<p>Tool calls are persisted as <code>ResponseItem::FunctionCall</code> values followed by <code>ResponseItem::FunctionCallOutput</code> values. If a thinking-enabled provider returns <code>reasoning_content</code>, Marvis stores it on assistant messages; for tool-call assistant messages, it is attached to the first function call and restored during history replay. The scheduler still emits tool begin/end events for live UI, and later turns replay persisted tool-call history as valid assistant tool-call plus tool-result chat messages.</p>
 <h2 id="persistence-flow"><a class="header" href="#persistence-flow">Persistence Flow</a></h2>
 <pre><code class="language-text">ThreadManager::create_thread
   -&gt; LocalHistoryStore::create_thread_record
@@ -723,6 +812,7 @@ run_user_turn
 <div class="table-wrapper"><table><thead><tr><th>Type</th><th>Purpose</th></tr></thead><tbody>
 <tr><td><code>OpenAiScheduler</code></td><td>Real model scheduler backed by <code>openai-rs::Client</code>.</td></tr>
 <tr><td><code>OpenAiCompatibleConfig</code></td><td>API key and base URL for an OpenAI-compatible provider.</td></tr>
+<tr><td><code>ModelRequestOptions</code></td><td>Thinking mode and optional reasoning effort applied to chat-completion requests.</td></tr>
 <tr><td><code>SyntheticScheduler</code></td><td>Deterministic scheduler used by tests/dev code, not by the VSCode product fallback path.</td></tr>
 </tbody></table>
 </div>
@@ -736,8 +826,10 @@ run_user_turn
 <ul>
 <li><code>config.api_key</code></li>
 <li><code>config.base_url</code></li>
+<li><code>config.request_options</code></li>
 </ul>
 <p>and maps client construction errors into <code>KernelError::InvalidRequest</code>.</p>
+<p><code>ModelRequestOptions</code> defaults to <code>auto</code>: DeepSeek-compatible base URLs receive <code>{"thinking":{"type":"disabled"}}</code>, while other providers omit the <code>thinking</code> parameter. Explicit <code>enabled</code>, <code>disabled</code>, and <code>provider_default</code> modes are also supported.</p>
 <h2 id="turn-execution"><a class="header" href="#turn-execution">Turn Execution</a></h2>
 <p><code>run_turn</code> performs this loop:</p>
 <ol>
@@ -747,7 +839,7 @@ run_user_turn
 <li>Convert dynamic tool specs into OpenAI function tool definitions.</li>
 <li>Send a streaming <code>chat/completions</code> request.</li>
 <li>Emit <code>AgentMessageDelta</code> events as content deltas arrive.</li>
-<li>Accumulate streamed tool-call deltas by index.</li>
+<li>Accumulate streamed reasoning-content and tool-call deltas by index.</li>
 <li>If there are no tool calls, return final assistant message as <code>SchedulerOutput</code>.</li>
 <li>If there are tool calls, emit tool begin/end events, execute each tool, append tool results to the chat messages, and continue the loop.</li>
 </ol>
@@ -768,6 +860,7 @@ run_user_turn
 <li><code>ResponseItem::FunctionCallOutput</code> to a tool result message.</li>
 </ul>
 <p>The scheduler returns function-call and function-call-output response items alongside the final assistant message, so future turns can replay tool history without malformed tool-result-only chat history.</p>
+<p>When a thinking-enabled provider streams <code>reasoning_content</code>, the scheduler stores it on assistant messages. For tool-call assistant messages, the content is stored on the first <code>FunctionCall</code> response item and restored when replaying history.</p>
 <h2 id="syntheticscheduler"><a class="header" href="#syntheticscheduler">SyntheticScheduler</a></h2>
 <p>The synthetic scheduler is used by tests and explicit development code only.</p>
 <p>Behavior:</p>
@@ -796,7 +889,7 @@ run_user_turn
 <tr><td><code>error.rs</code></td><td>Transport, stream, and API error enums.</td></tr>
 <tr><td><code>chat/mod.rs</code></td><td>Chat namespace.</td></tr>
 <tr><td><code>chat/completions.rs</code></td><td>Chat completion create and create_stream APIs.</td></tr>
-<tr><td><code>types/chat.rs</code></td><td>Chat request, message, role, tool call, and response types.</td></tr>
+<tr><td><code>types/chat.rs</code></td><td>Chat request, thinking options, message, role, tool call, and response types.</td></tr>
 <tr><td><code>types/common.rs</code></td><td>Tool definition, function definition, usage, finish reason.</td></tr>
 <tr><td><code>types/stream.rs</code></td><td>Streaming chunk and delta types.</td></tr>
 </tbody></table>
@@ -809,7 +902,7 @@ run_user_turn
 <li><code>Client</code>, <code>ClientBuilder</code></li>
 <li><code>ApiError</code>, <code>StreamError</code>, <code>TransportError</code></li>
 <li><code>Provider</code>, <code>RetryConfig</code></li>
-<li>chat request/response/message/tool types</li>
+<li>chat request/response/message/tool types, including DeepSeek-style <code>thinking</code> and <code>reasoning_content</code></li>
 <li>common usage and finish-reason types</li>
 <li>streaming delta types</li>
 </ul>
@@ -840,6 +933,8 @@ run_user_turn
 <li>stream idle timeout</li>
 </ul>
 <p><code>Provider::url_for_path</code> joins base URL, path, and query params. <code>Provider::build_request</code> creates a <code>Request</code> with method, URL, cloned headers, no body, and no timeout.</p>
+<h2 id="thinking-and-reasoning-content"><a class="header" href="#thinking-and-reasoning-content">Thinking And Reasoning Content</a></h2>
+<p><code>ChatCompletionRequest</code> can carry optional DeepSeek-compatible <code>thinking</code> and <code>reasoning_effort</code> fields. Assistant <code>Message</code> and streaming deltas can also carry <code>reasoning_content</code>. Consumers must preserve that field when a thinking-enabled response includes tool calls, because some providers require it to be passed back with the assistant tool-call message.</p>
 <h2 id="auth"><a class="header" href="#auth">Auth</a></h2>
 <p><code>AuthProvider</code> returns an optional bearer token. <code>BearerAuth</code> stores one token and returns it for each request. Internal <code>add_auth_headers</code> attaches an <code>Authorization: Bearer ...</code> header when a token is available.</p>
 <h2 id="transport"><a class="header" href="#transport">Transport</a></h2>
@@ -935,7 +1030,6 @@ run_user_turn
 <li>related diagnostic ids</li>
 <li>token estimate</li>
 <li>freshness</li>
-<li>confidence</li>
 <li>importance</li>
 <li>risk level</li>
 </ul>
@@ -1049,15 +1143,15 @@ run_user_turn
 <div class="table-wrapper"><table><thead><tr><th>Type</th><th>Purpose</th></tr></thead><tbody>
 <tr><td><code>PaveVector</code></td><td>Named <code>f32</code> vector dimensions with dot, norm, and cosine helpers.</td></tr>
 <tr><td><code>ToolAccess</code></td><td>Approval-style capability flags for an agent profile.</td></tr>
-<tr><td><code>AgentProfile</code></td><td>Model name, skill ids, MCP server ids, fallback skill prompt, tool allowlist, approval defaults, and PAVE vector.</td></tr>
-<tr><td><code>TaskCandidate</code></td><td>LLM-segmented task with evidence, risk, desired tools, confidence, and task PAVE vector.</td></tr>
-<tr><td><code>RouteDecision</code></td><td>Selected task/profile pair with cosine score, final score, and explanation.</td></tr>
-<tr><td><code>Router</code></td><td>Scores task candidates against profiles and returns the best route above threshold.</td></tr>
+<tr><td><code>AgentProfile</code></td><td>Runtime agent identity: shared model name, skill ids, MCP server ids, fallback instruction, tool allowlist, approval defaults, and PAVE vector.</td></tr>
+<tr><td><code>TaskCandidate</code></td><td>LLM-segmented task with optional selected agent id, evidence, risk, desired tools, and task PAVE vector.</td></tr>
+<tr><td><code>RouteDecision</code></td><td>Selected task/profile pair with internal route metrics and explanation.</td></tr>
+<tr><td><code>Router</code></td><td>Matches task candidates against profiles and returns the best compatible route.</td></tr>
 </tbody></table>
 </div>
 <h2 id="behavior"><a class="header" href="#behavior">Behavior</a></h2>
-<p>Vectors are sparse maps. Cosine similarity is calculated over shared dimensions and returns <code>0.0</code> for zero vectors. Routing adds small tool-match bonuses and subtracts penalties for unavailable desired tools or high-risk tasks assigned to non-risky profiles.</p>
-<p>The crate has no model or VSCode dependency. It is used by <code>src/autonomy.rs</code>, while profile values are sent from VSCode settings and defaulted in Rust when no valid profiles are configured.</p>
+<p>Vectors are sparse maps. Cosine similarity is calculated over shared dimensions and returns <code>0.0</code> for zero vectors. Current autonomy asks the LLM segmenter to choose an agent id first; the router validates that the selected agent can support the task and uses PAVE matching only as a fallback for task payloads without an agent id.</p>
+<p>The crate has no model or VSCode dependency. It is used by <code>src/autonomy.rs</code>; VSCode routing profiles are generated in Rust by <code>src/skill_mcp.rs</code> from discovered skills, declared tool functions, MCP dependencies, and built-in toolsets.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="persistence-crates"><a class="header" href="#persistence-crates">Persistence Crates</a></h1>
 <p>Persistence is split across three crates:</p>
 <ul>
@@ -1226,11 +1320,11 @@ run_user_turn
 </ul>
 <p><code>VscodeRequest</code> variants:</p>
 <div class="table-wrapper"><table><thead><tr><th>Variant</th><th>Payload</th></tr></thead><tbody>
-<tr><td><code>Initialize</code></td><td>workspace root, optional model, optional base URL, optional max tokens, agent profiles</td></tr>
+<tr><td><code>Initialize</code></td><td>workspace root, optional model, optional API key, optional base URL, optional thinking mode, optional reasoning effort, optional max tokens</td></tr>
 <tr><td><code>StatusUpdate</code></td><td><code>VscodeStatus</code></td></tr>
 <tr><td><code>CommandResult</code></td><td><code>CommandResult</code></td></tr>
 <tr><td><code>UserPrompt</code></td><td>prompt plus optional <code>VscodeStatus</code> and per-prompt approval grants</td></tr>
-<tr><td><code>AutonomyTick</code></td><td><code>VscodeStatus</code>, trigger, and optional current agent profiles</td></tr>
+<tr><td><code>AutonomyTick</code></td><td><code>VscodeStatus</code> and trigger. Legacy <code>agent_profiles</code> payloads are accepted but ignored by the runtime.</td></tr>
 <tr><td><code>RunSuggestedTask</code></td><td>suggestion id plus requested approval grants; runtime caps them to the stored route approval</td></tr>
 <tr><td><code>DismissSuggestion</code></td><td>suggestion id</td></tr>
 <tr><td><code>Shutdown</code></td><td>no payload</td></tr>
@@ -1260,7 +1354,7 @@ run_user_turn
 <li><code>ShutdownComplete</code></li>
 </ul>
 <p>The <code>Ready</code> response includes workspace root, model, base URL, and initial status report.</p>
-<p><code>AutonomyDecision</code> is one of <code>idle</code>, <code>suggest</code>, or <code>suppressed</code>. A suggestion includes the selected route, task, agent profile, PAVE scores, and required approval flags.</p>
+<p><code>AutonomyDecision</code> is one of <code>idle</code>, <code>suggest</code>, or <code>suppressed</code>. A suggestion includes the selected route, task, agent profile, route explanation, and required approval flags.</p>
 <h2 id="vscode-runtime-events"><a class="header" href="#vscode-runtime-events">VSCode Runtime Events</a></h2>
 <p><code>VscodeRuntimeEvent</code> variants:</p>
 <ul>
@@ -1319,7 +1413,7 @@ run_user_turn
 <ul>
 <li>Parse CLI flags.</li>
 <li>Select VSCode stdio, web, or CLI mode.</li>
-<li>Read <code>MARVIS_API_KEY</code> and optional <code>MARVIS_BASE_URL</code>.</li>
+<li>Read OpenAI-compatible provider configuration.</li>
 <li>Build <code>OpenAiScheduler</code>, <code>LocalToolExecutor</code>, and <code>ThreadManager</code>.</li>
 <li>Start a thread with policy-filtered local tool definitions.</li>
 <li>Consume runtime events and adapt them for the selected UI.</li>
@@ -1406,7 +1500,7 @@ run_user_turn
 <li>base URL</li>
 <li>max tokens</li>
 <li>next process id</li>
-<li>configured agent profiles</li>
+<li>auto-detected agent profiles</li>
 <li>autonomy coordinator</li>
 </ul>
 <h3 id="request-handling"><a class="header" href="#request-handling">Request Handling</a></h3>
@@ -1414,7 +1508,8 @@ run_user_turn
 <ul>
 <li>Sets workspace root, model, and max tokens.</li>
 <li>Creates a new <code>StatusStore</code>.</li>
-<li>Loads <code>MARVIS_API_KEY</code> and base URL.</li>
+<li>Loads <code>marvis.apiKey</code> and base URL from the initialize payload.</li>
+<li>Loads bundled and workspace skills, then generates same-model agent identities from skills and built-in toolsets.</li>
 <li>Returns <code>Ready</code>.</li>
 </ul>
 <p><code>StatusUpdate</code>:</p>
@@ -1443,9 +1538,10 @@ run_user_turn
 <p><code>AutonomyTick</code>:</p>
 <ul>
 <li>Updates VSCode status and git state.</li>
-<li>Skips unchanged, non-actionable, or in-flight state.</li>
-<li>Calls the OpenAI-compatible model for strict JSON task segmentation.</li>
-<li>Routes task candidates against configured agent profiles with PAVE cosine scoring.</li>
+<li>Skips in-flight, unchanged, busy, ambiguous, or merely dirty/risky state.</li>
+<li>Calls the OpenAI-compatible model for strict JSON task segmentation when VSCode status points to a focused, useful next step; the segmenter prompt biases toward specific suggest-first action rather than waiting for perfect certainty.</li>
+<li>Requires the segmenter to choose an agent id from the auto-detected skill/toolset agents before permission is requested.</li>
+<li>Uses PAVE matching only as a compatibility fallback when older task payloads do not include an agent id.</li>
 <li>Returns <code>AutonomyDecision::Idle</code>, <code>Suggest</code>, or <code>Suppressed</code>.</li>
 </ul>
 <p><code>RunSuggestedTask</code>:</p>
@@ -1454,7 +1550,7 @@ run_user_turn
 <li>Caps the request approval to the stored routed approval.</li>
 <li>Resolves the selected agent's skills and MCP servers.</li>
 <li>Adds selected skill instructions to the system prompt.</li>
-<li>Filters visible tools by runtime policy, selected skill package local-tool dependencies, and the agent tool allowlist.</li>
+<li>Filters visible tools by runtime policy, selected skill package local-tool dependencies, and the generated agent tool allowlist.</li>
 <li>Exposes discovered stdio MCP tools only when MCP discovery succeeds.</li>
 <li>Runs the existing bounded VSCode prompt flow.</li>
 </ul>
@@ -1469,7 +1565,7 @@ run_user_turn
 <li>Stops the stdio loop.</li>
 </ul>
 <h3 id="vscode-system-prompt"><a class="header" href="#vscode-system-prompt">VSCode System Prompt</a></h3>
-<p><code>VSCODE_SYSTEM_PROMPT</code> tells the model to treat VSCode status as data, pay attention to active editor, cursor, diagnostics, command failures, and git state, and to be cautious with risky edits.</p>
+<p><code>VSCODE_SYSTEM_PROMPT</code> tells the model to treat VSCode status as data, pay attention to active editor, cursor, diagnostics, command failures, and git state, infer the immediate user intent implied by that status, stay focused on that intent, use no more than 15 tool calls in one turn, and be cautious with risky edits.</p>
 <h2 id="design-notes-5"><a class="header" href="#design-notes-5">Design Notes</a></h2>
 <p>The binary crate is currently the composition root and tool owner. That is acceptable for the current size, but moving <code>src/tools.rs</code> into a tool-gateway crate would make the runtime boundary cleaner.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="local-tool-gateway"><a class="header" href="#local-tool-gateway">Local Tool Gateway</a></h1>
@@ -1690,7 +1786,7 @@ run_user_turn
 <p>Selected routed agents can inspect equipped Codex-style skill packages:</p>
 <ul>
 <li><code>list_skills</code>: lists equipped skills, package roots, tool dependencies, and resource counts.</li>
-<li><code>list_skill_resources</code>: lists scripts, references, and assets for one equipped skill.</li>
+<li><code>list_skill_resources</code>: lists declared package resources for one equipped skill, classified as scripts, references, or assets.</li>
 <li><code>read_skill_resource</code>: reads a declared text resource from an equipped skill package.</li>
 <li><code>run_skill_script</code>: runs a declared script directly, without shell string interpolation, and only appears with risky-shell approval.</li>
 </ul>
@@ -1713,20 +1809,21 @@ run_user_turn
 <li>Persist tool call records as response items in addition to trace events.</li>
 </ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="skill-and-mcp-runtime"><a class="header" href="#skill-and-mcp-runtime">Skill And MCP Runtime</a></h1>
-<p><code>src/skill_mcp.rs</code> resolves routed agent profiles, while <code>src/skills.rs</code> owns Codex-style skill package loading. Skills and tools are separate layers: skills are archived instruction packages, local tool functions and MCP tools are the execution layer.</p>
+<p><code>src/skill_mcp.rs</code> generates and resolves routed agent identities, while <code>src/skills.rs</code> owns Codex-style skill package loading. Skills and tools are separate layers: skills are archived instruction packages, local tool functions and MCP tools are the execution layer.</p>
 <h2 id="skills"><a class="header" href="#skills">Skills</a></h2>
 <p>The registry loads:</p>
 <ul>
-<li>bundled system skill packages: <code>rust-diagnostic-repair</code>, <code>test-failure-triage</code>, and <code>repo-explainer</code></li>
+<li>bundled system skill packages from <code>skills/system/**/SKILL.md</code>, including native Marvis skills, imported Anthropic skills, and imported local Codex workspace skills</li>
 <li>workspace skills under <code>.marvis/skills/**/SKILL.md</code></li>
 <li>Codex-compatible workspace skills under <code>.agents/skills/**/SKILL.md</code></li>
 </ul>
-<p>Bundled system skills are real packages with <code>SKILL.md</code>, <code>agents/openai.yaml</code>, <code>references/</code>, and <code>scripts/</code>. At runtime Marvis materializes them under <code>.lite-code/skills/.system</code> and loads them through the same package loader used for workspace skills.</p>
+<p>Bundled system skills are real packages with <code>SKILL.md</code>, optional <code>agents/openai.yaml</code>, and package resources. A build script generates a binary-safe catalog from <code>skills/system</code>, so text resources, scripts, images, fonts, PDFs, and archives can ship without a manual Rust manifest. At runtime Marvis materializes them under <code>.lite-code/skills/.system</code> and loads them through the same package loader used for workspace skills.</p>
 <p>Each <code>SKILL.md</code> must start with YAML-style frontmatter containing at least <code>name</code> and <code>description</code>. An optional <code>id</code> overrides the normalized skill id. Skill packages can include:</p>
 <ul>
-<li><code>references/</code>: read-only Markdown or text references</li>
+<li>any non-hidden package files as resources, excluding <code>SKILL.md</code> and <code>agents/openai.{yaml,json}</code> metadata</li>
 <li><code>scripts/</code>: script utilities that can run only when risky-shell approval is present</li>
-<li><code>assets/</code>: package assets such as icons or templates</li>
+<li><code>assets/</code>, fonts, images, PDFs, and archives as asset resources</li>
+<li><code>references/</code>, <code>reference/</code>, <code>examples/</code>, <code>templates/</code>, <code>themes/</code>, root Markdown guides, and similar files as reference resources</li>
 </ul>
 <p>Optional metadata can live at <code>agents/openai.json</code> or <code>agents/openai.yaml</code> next to the skill file. Marvis reads:</p>
 <ul>
@@ -1734,7 +1831,8 @@ run_user_turn
 <li><code>dependencies.tools</code> entries with <code>type: mcp</code>, <code>value</code>, <code>transport: stdio</code>, <code>command</code>, and optional <code>args</code></li>
 <li>legacy <code>capabilities</code> as local tool dependencies</li>
 </ul>
-<p>Agent profiles name skills through <code>skills: ["skill-id"]</code>. The active local tool list is capped by both the agent profile allowlist and the selected skill's local tool dependencies. Selected skill bodies are injected into the system prompt, and equipped agents can use <code>list_skills</code>, <code>list_skill_resources</code>, and <code>read_skill_resource</code> to inspect package resources.</p>
+<p>Each implicitly invokable skill becomes a same-model agent identity. The generated agent id is the skill id, the label comes from skill interface metadata when present, and the tool allowlist comes from declared local tool dependencies. Imported bundled skills include <code>agents/openai.yaml</code> metadata so they register as useful agents instead of read-only placeholders. Skills without explicit tool metadata still receive a read-only inspection toolset. Marvis also generates built-in toolset agents for read-only inspection, verification, and focused workspace patches.</p>
+<p>The active local tool list is capped by runtime approval and the generated agent tool allowlist. Selected skill bodies are injected into the system prompt, and equipped agents can use <code>list_skills</code>, <code>list_skill_resources</code>, and <code>read_skill_resource</code> to inspect package resources. A skill can set <code>policy.allow_implicit_invocation: false</code> in <code>agents/openai.yaml</code> or <code>agents/openai.json</code> to stay available for explicit future use without becoming an autonomous routing target.</p>
 <h2 id="mcp"><a class="header" href="#mcp">MCP</a></h2>
 <p>The MCP runtime reads stdio server config from <code>.marvis/mcp.json</code> and <code>.mcp.json</code>.</p>
 <pre><code class="language-json">{
@@ -1781,14 +1879,17 @@ run_user_turn
 <div class="table-wrapper"><table><thead><tr><th>Setting</th><th>Default</th><th>Meaning</th></tr></thead><tbody>
 <tr><td><code>marvis.runtimePath</code></td><td>empty</td><td>Optional path to the <code>lite-code</code> binary.</td></tr>
 <tr><td><code>marvis.model</code></td><td><code>gpt-4.1-mini</code></td><td>Model passed to the Rust runtime.</td></tr>
+<tr><td><code>marvis.apiKey</code></td><td>empty</td><td>API key for the OpenAI-compatible provider used by the VSCode runtime.</td></tr>
 <tr><td><code>marvis.baseUrl</code></td><td>empty</td><td>Optional OpenAI-compatible base URL. Empty means use <code>MARVIS_BASE_URL</code> or <code>https://api.openai.com/v1</code>.</td></tr>
+<tr><td><code>marvis.thinkingMode</code></td><td><code>auto</code></td><td>Thinking mode for compatible providers. <code>auto</code> disables DeepSeek thinking and omits the parameter elsewhere.</td></tr>
+<tr><td><code>marvis.reasoningEffort</code></td><td>empty</td><td>Optional <code>low</code>, <code>medium</code>, or <code>high</code> reasoning effort for compatible providers.</td></tr>
 <tr><td><code>marvis.maxTokens</code></td><td><code>4096</code></td><td>Maximum response tokens per model turn.</td></tr>
 <tr><td><code>marvis.autonomy.enabled</code></td><td><code>true</code></td><td>Enables suggest-first autonomous status checks.</td></tr>
 <tr><td><code>marvis.autonomy.idleDelayMs</code></td><td><code>3000</code></td><td>Debounce delay before a quiet status check.</td></tr>
 <tr><td><code>marvis.autonomy.heartbeatIntervalMs</code></td><td><code>30000</code></td><td>Low-frequency heartbeat interval while the runtime is active.</td></tr>
-<tr><td><code>marvis.agentProfiles</code></td><td>built-in Rust/test/explainer profiles</td><td>Agent model names, skill ids, MCP server ids, tool allowlists, approval defaults, and PAVE vectors.</td></tr>
 </tbody></table>
 </div>
+<p>Agent identities are not configured in VSCode settings. The runtime reloads bundled Marvis/imported skills, workspace <code>SKILL.md</code> packages, and local tool functions, then synthesizes same-model agents from those skills, their declared tool dependencies, declared MCP dependencies, and built-in read-only/verification/patch toolsets.</p>
 <h2 id="activation"><a class="header" href="#activation">Activation</a></h2>
 <p>The extension activates on startup and on each Marvis command. <code>activate(context)</code> creates:</p>
 <ul>
@@ -1889,7 +1990,7 @@ run_user_turn
 <li><code>truncateTail</code></li>
 </ul>
 <p><code>collectStatus</code> sends active editor, open editors, visible ranges, selections, cursor bubble, recent files, diagnostics, terminal-like command results, running tasks, debug sessions, trust state, remote name, and VSCode app/profile name. When VSCode exposes shell-integration events, Marvis also records completed terminal shell executions and their output tail.</p>
-<p>Autonomy ticks are sent after diagnostics, saves, command/task results, debug termination, quiet editor changes, and the heartbeat. The extension does not start tool execution from a tick; it displays the returned suggestion and sends <code>run_suggested_task</code> only after acceptance.</p>
+<p>Autonomy ticks are sent after diagnostics, saves, command/task results, debug termination, quiet editor changes, and the heartbeat. The runtime stays idle for unchanged, busy, ambiguous, or merely dirty/risky snapshots. When status points to a focused, useful next step, the LLM is prompted to proactively infer the user's intent, select an auto-detected skill/toolset agent, and return a suggest-first task. The extension asks for user acceptance before sending <code>run_suggested_task</code>.</p>
 <h2 id="webview-panel"><a class="header" href="#webview-panel">Webview Panel</a></h2>
 <p><code>renderPanelHtml()</code> returns a self-contained HTML document with:</p>
 <ul>
@@ -1911,11 +2012,51 @@ run_user_turn
 <p>If none of those exists, the extension returns a configuration error instead of invoking <code>cargo run</code>.</p>
 <h2 id="design-notes-7"><a class="header" href="#design-notes-7">Design Notes</a></h2>
 <p>The extension is intentionally thin with respect to agent behavior. It gathers high-quality IDE state and sends typed requests. Rust decides how to segment state, build the prompt context, run the model, and execute tools.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="autonomy-showcase-demo"><a class="header" href="#autonomy-showcase-demo">Autonomy Showcase Demo</a></h1>
+<p>The repository includes a recording-oriented demo under <code>demos/autonomy-showcase</code>. It opens a disposable VSCode workspace, starts Marvis, introduces focused code and documentation traps, runs matching VSCode tasks, and waits so the normal autonomy debounce or heartbeat can trigger suggestions.</p>
+<p>The demo does not fake runtime output. It drives the real VSCode extension commands and the real Rust <code>--vscode-stdio</code> runtime.</p>
+<h2 id="layout"><a class="header" href="#layout">Layout</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Path</th><th>Role</th></tr></thead><tbody>
+<tr><td><code>demos/autonomy-showcase/launch.sh</code></td><td>Builds <code>target/debug/lite-code</code> and opens VSCode with the Marvis extension plus the demo driver extension.</td></tr>
+<tr><td><code>demos/autonomy-showcase/driver-extension</code></td><td>Small VSCode extension that resets the demo workspace, writes traps, focuses files, runs tasks, and waits between stages.</td></tr>
+<tr><td><code>demos/autonomy-showcase/workspace</code></td><td>Disposable JavaScript/documentation project used for the recording.</td></tr>
+</tbody></table>
+</div>
+<h2 id="run"><a class="header" href="#run">Run</a></h2>
+<p>Set <code>marvis.apiKey</code> in VSCode User or Machine Settings first. Then run:</p>
+<pre><code class="language-bash">./demos/autonomy-showcase/launch.sh
+</code></pre>
+<p>On macOS the launcher prefers the official VSCode CLI at:</p>
+<pre><code class="language-text">/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code
+</code></pre>
+<p>Set <code>CODE_CMD=/absolute/path/to/code</code> if the launcher should use a different VSCode CLI.</p>
+<h2 id="verify"><a class="header" href="#verify">Verify</a></h2>
+<p>The demo includes a headless trap verifier:</p>
+<pre><code class="language-bash">npm --prefix demos/autonomy-showcase run verify
+</code></pre>
+<p>It copies the workspace to a temporary directory, checks that the baseline passes, applies each trap, and asserts that the corresponding task fails with useful output.</p>
+<h2 id="recording-flow"><a class="header" href="#recording-flow">Recording Flow</a></h2>
+<p>The driver starts automatically when <code>demos/autonomy-showcase/workspace</code> opens. If it does not, run <code>Marvis Demo: Run Autonomous Showcase</code>. Each stage starts from a clean baseline so only the current trap is active while Marvis observes the workspace.</p>
+<p>The stages are:</p>
+<div class="table-wrapper"><table><thead><tr><th>Stage</th><th>Status signal</th><th>Expected Marvis behavior</th></tr></thead><tbody>
+<tr><td>Focused JavaScript bug</td><td>Active editor, saved file, JS diagnostic, failing VSCode task</td><td>Suggest a narrow repair near the cursor.</td></tr>
+<tr><td>Refactor fallout</td><td>Deleted public module, moved implementation, active failing import, failing VSCode task</td><td>Suggest restoring the public import path or updating references.</td></tr>
+<tr><td>Missing discount rule</td><td>Cursor at TODO plus failing test task</td><td>Suggest implementing the missing business rule.</td></tr>
+<tr><td>Dashboard readiness</td><td>Active HTML TODO plus failing accessibility check task</td><td>Suggest an accessible UI patch with a frontend-oriented agent.</td></tr>
+<tr><td>Release-note readiness</td><td>Active Markdown file plus failing documentation check</td><td>Suggest a documentation patch or verification step.</td></tr>
+</tbody></table>
+</div>
+<p>Suggestions are still suggest-first. Accepting one shows the normal bounded execution path; dismissing lets the recording continue to the next trap quickly.</p>
+<h2 id="safety"><a class="header" href="#safety">Safety</a></h2>
+<p>The driver refuses to run unless the open workspace contains <code>.marvis-demo.json</code>. It only modifies files under <code>demos/autonomy-showcase/workspace</code>, and it restores the workspace at the beginning and end of the run.</p>
+<p>If a recording is interrupted mid-stage, reset from the terminal:</p>
+<pre><code class="language-bash">npm --prefix demos/autonomy-showcase run reset
+</code></pre>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="configuration-and-data-locations"><a class="header" href="#configuration-and-data-locations">Configuration And Data Locations</a></h1>
 <h2 id="environment-variables"><a class="header" href="#environment-variables">Environment Variables</a></h2>
 <div class="table-wrapper"><table><thead><tr><th>Variable</th><th>Used by</th><th>Meaning</th></tr></thead><tbody>
-<tr><td><code>MARVIS_API_KEY</code></td><td>CLI, web, VSCode runtime</td><td>API key for any OpenAI-compatible chat completions provider. Required for real model turns.</td></tr>
-<tr><td><code>MARVIS_BASE_URL</code></td><td>CLI, web, VSCode runtime</td><td>Optional OpenAI-compatible base URL. Defaults to <code>https://api.openai.com/v1</code>.</td></tr>
+<tr><td><code>MARVIS_API_KEY</code></td><td>CLI, web</td><td>API key for any OpenAI-compatible chat completions provider. Required for real CLI/web model turns.</td></tr>
+<tr><td><code>MARVIS_BASE_URL</code></td><td>CLI, web, VSCode runtime fallback</td><td>Optional OpenAI-compatible base URL. Defaults to <code>https://api.openai.com/v1</code>.</td></tr>
 <tr><td><code>LITE_CODE_STATE_HOME</code></td><td><code>state-store</code> constant</td><td>Intended state root override. The current implementation exposes the constant but does not wire global discovery through it.</td></tr>
 </tbody></table>
 </div>
@@ -1935,23 +2076,26 @@ run_user_turn
 <div class="table-wrapper"><table><thead><tr><th>Setting</th><th>Meaning</th></tr></thead><tbody>
 <tr><td><code>marvis.runtimePath</code></td><td>Absolute or workspace-relative binary path to run instead of auto-detected runtime.</td></tr>
 <tr><td><code>marvis.model</code></td><td>Model passed to <code>Initialize</code>.</td></tr>
+<tr><td><code>marvis.apiKey</code></td><td>API key passed to <code>Initialize</code> for the OpenAI-compatible provider.</td></tr>
 <tr><td><code>marvis.baseUrl</code></td><td>Optional OpenAI-compatible base URL passed to <code>Initialize</code>.</td></tr>
+<tr><td><code>marvis.thinkingMode</code></td><td><code>auto</code>, <code>disabled</code>, <code>enabled</code>, or <code>provider_default</code>; <code>auto</code> disables DeepSeek thinking and omits the parameter elsewhere.</td></tr>
+<tr><td><code>marvis.reasoningEffort</code></td><td>Optional <code>low</code>, <code>medium</code>, or <code>high</code> reasoning effort for compatible providers.</td></tr>
 <tr><td><code>marvis.maxTokens</code></td><td>Max tokens passed to <code>Initialize</code>.</td></tr>
 <tr><td><code>marvis.autonomy.enabled</code></td><td>Enables VSCode status wake-up checks and suggest-first autonomous routing.</td></tr>
 <tr><td><code>marvis.autonomy.idleDelayMs</code></td><td>Debounce delay before sending an autonomy tick after status changes.</td></tr>
 <tr><td><code>marvis.autonomy.heartbeatIntervalMs</code></td><td>Heartbeat interval for low-frequency status checks while the runtime is active.</td></tr>
-<tr><td><code>marvis.agentProfiles</code></td><td>Agent model names, skill ids, MCP server ids, tool allowlists, approval defaults, and PAVE vectors.</td></tr>
 </tbody></table>
 </div>
-<p>Agent profiles never contain API keys or base URLs. They select model names against the same OpenAI-compatible provider configured by <code>MARVIS_API_KEY</code> and <code>MARVIS_BASE_URL</code>.</p>
+<p>VSCode no longer accepts manually configured agent profiles. Store <code>marvis.apiKey</code> in User or Machine Settings rather than committed workspace settings; agent identities are synthesized inside the runtime from discovered skills, declared tool dependencies, MCP dependencies, and built-in toolsets. Every generated agent uses the shared <code>marvis.model</code>, <code>marvis.apiKey</code>, and <code>marvis.baseUrl</code> provider settings.</p>
 <h2 id="workspace-skill-and-mcp-config"><a class="header" href="#workspace-skill-and-mcp-config">Workspace Skill And MCP Config</a></h2>
 <p>Workspace skills are loaded from:</p>
 <pre><code class="language-text">.marvis/skills/**/SKILL.md
 .agents/skills/**/SKILL.md
 </code></pre>
-<p>Bundled system skills are materialized under:</p>
+<p>Bundled system skills are built from <code>skills/system/**/SKILL.md</code>, including imported Anthropic and local Codex skill packages, then materialized under:</p>
 <pre><code class="language-text">.lite-code/skills/.system/**/SKILL.md
 </code></pre>
+<p>To add a project-specific skill, use a workspace skill path. To ship a new built-in skill with Marvis itself, add a package under <code>skills/system</code>; the build script embeds its resources automatically.</p>
 <p>Stdio MCP servers are loaded from:</p>
 <pre><code class="language-text">.marvis/mcp.json
 .mcp.json
@@ -1980,10 +2124,12 @@ run_user_turn
 <h2 id="network-behavior"><a class="header" href="#network-behavior">Network Behavior</a></h2>
 <p>All product/runtime modes use <code>OpenAiScheduler</code> with an OpenAI-compatible provider config:</p>
 <ul>
-<li><code>MARVIS_API_KEY</code> supplies the bearer token.</li>
-<li><code>MARVIS_BASE_URL</code> supplies the provider URL, or defaults to <code>https://api.openai.com/v1</code>.</li>
+<li><code>marvis.apiKey</code> supplies the bearer token in VSCode.</li>
+<li><code>MARVIS_API_KEY</code> supplies the bearer token in CLI/web modes.</li>
+<li><code>MARVIS_BASE_URL</code> supplies the provider URL in CLI/web modes and as a VSCode fallback, or defaults to <code>https://api.openai.com/v1</code>.</li>
+<li><code>marvis.thinkingMode=auto</code> sends disabled thinking for DeepSeek-compatible endpoints so tool-call loops do not require reasoning content by default.</li>
 </ul>
-<p>If <code>MARVIS_API_KEY</code> is missing, the runtime returns a clear configuration error. It does not use a production fake-model fallback.</p>
+<p>If the relevant API key is missing, the runtime returns a clear configuration error. It does not use a production fake-model fallback.</p>
 <h2 id="ports"><a class="header" href="#ports">Ports</a></h2>
 <p>The web harness binds:</p>
 <pre><code class="language-text">127.0.0.1:3000
@@ -2058,8 +2204,10 @@ npm --prefix apps/vscode-extension run check
 <p>This index lists every source module and its design responsibility.</p>
 <h2 id="root-binary-crate"><a class="header" href="#root-binary-crate">Root Binary Crate</a></h2>
 <div class="table-wrapper"><table><thead><tr><th>File</th><th>Responsibility</th></tr></thead><tbody>
+<tr><td><code>build.rs</code></td><td>Generates the binary-safe bundled skill catalog from <code>skills/system/**/SKILL.md</code>.</td></tr>
 <tr><td><code>src/main.rs</code></td><td>Binary entrypoint, CLI parsing, mode selection, runtime composition, CLI loop, shared system prompt.</td></tr>
 <tr><td><code>src/autonomy.rs</code></td><td>Autonomous wake-up coordinator, LLM problem segmentation, suggestion cooldowns, PAVE routing, accepted suggestion prompt building.</td></tr>
+<tr><td><code>src/skills.rs</code></td><td>Codex-style skill package loading, bundled skill materialization, resource indexing, and selected skill prompt rendering.</td></tr>
 <tr><td><code>src/skill_mcp.rs</code></td><td>Skill registry, selected skill rendering, stdio MCP discovery, tool qualification, and MCP tool calls.</td></tr>
 <tr><td><code>src/web.rs</code></td><td>Axum web harness, static HTML serving, chat endpoint, SSE event stream, web thread setup.</td></tr>
 <tr><td><code>src/vscode.rs</code></td><td>VSCode stdio server, request dispatch, status store integration, context capsule submission, streamed VSCode events.</td></tr>
@@ -2072,6 +2220,14 @@ npm --prefix apps/vscode-extension run check
 <tr><td><code>apps/vscode-extension/package.json</code></td><td>Extension manifest, activation events, commands, menus, settings, scripts.</td></tr>
 <tr><td><code>apps/vscode-extension/extension.js</code></td><td>Extension controller, runtime child process client, status collection, webview panel, code actions.</td></tr>
 <tr><td><code>apps/vscode-extension/README.md</code></td><td>Development launch guide.</td></tr>
+</tbody></table>
+</div>
+<h2 id="demo-workspaces"><a class="header" href="#demo-workspaces">Demo Workspaces</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>File</th><th>Responsibility</th></tr></thead><tbody>
+<tr><td><code>demos/autonomy-showcase/launch.sh</code></td><td>Builds the debug runtime and opens VSCode with the Marvis and demo-driver development extensions.</td></tr>
+<tr><td><code>demos/autonomy-showcase/scripts/verify-traps.js</code></td><td>Headless verifier that ensures the clean demo workspace passes and each timed trap produces a failing task signal.</td></tr>
+<tr><td><code>demos/autonomy-showcase/driver-extension/extension.js</code></td><td>Drives the timed autonomy showcase by resetting files, focusing editor context, running tasks, and waiting for Marvis.</td></tr>
+<tr><td><code>demos/autonomy-showcase/workspace</code></td><td>Disposable JavaScript and documentation project used by the showcase traps.</td></tr>
 </tbody></table>
 </div>
 <h2 id="cratesprotocol"><a class="header" href="#cratesprotocol"><code>crates/protocol</code></a></h2>
@@ -2116,7 +2272,7 @@ npm --prefix apps/vscode-extension run check
 </div>
 <h2 id="cratespave-router"><a class="header" href="#cratespave-router"><code>crates/pave-router</code></a></h2>
 <div class="table-wrapper"><table><thead><tr><th>File</th><th>Responsibility</th></tr></thead><tbody>
-<tr><td><code>crates/pave-router/src/lib.rs</code></td><td>Sparse PAVE vectors, tool access flags, agent profiles, task candidates, route scoring, default profiles.</td></tr>
+<tr><td><code>crates/pave-router/src/lib.rs</code></td><td>Sparse PAVE vectors, tool access flags, generated agent identities, task candidates, and route scoring.</td></tr>
 </tbody></table>
 </div>
 <h2 id="persistence"><a class="header" href="#persistence">Persistence</a></h2>
@@ -2275,7 +2431,7 @@ npm --prefix apps/vscode-extension run check
 <h2 id="ui-bridge-interfaces"><a class="header" href="#ui-bridge-interfaces">UI Bridge Interfaces</a></h2>
 <div class="table-wrapper"><table><thead><tr><th>Interface</th><th>Kind</th><th>Purpose</th></tr></thead><tbody>
 <tr><td><code>VscodeRequestEnvelope</code></td><td>struct</td><td>Stdio request envelope.</td></tr>
-<tr><td><code>VscodeRequest</code></td><td>enum</td><td>Initialize, status update, command result, prompt, shutdown.</td></tr>
+<tr><td><code>VscodeRequest</code></td><td>enum</td><td>Initialize, status update, command result, prompt, autonomy tick, suggestion accept/dismiss, shutdown. Initialize carries model, API key, base URL, thinking mode, reasoning effort, and max tokens; agent identities are generated inside the runtime.</td></tr>
 <tr><td><code>VscodeResponseEnvelope</code></td><td>struct</td><td>Stdio response envelope.</td></tr>
 <tr><td><code>VscodeResponse</code></td><td>enum</td><td>Ready, status report, agent event, complete, error, shutdown complete.</td></tr>
 <tr><td><code>VscodeRuntimeEvent</code></td><td>enum</td><td>Surface event for VSCode.</td></tr>

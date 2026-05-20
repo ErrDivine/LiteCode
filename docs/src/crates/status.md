@@ -36,7 +36,6 @@ Each segment contains:
 - related diagnostic ids
 - token estimate
 - freshness
-- confidence
 - importance
 - risk level
 

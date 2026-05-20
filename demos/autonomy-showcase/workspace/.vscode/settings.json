@@ -1,0 +1,9 @@
+{
+  "marvis.autonomy.enabled": true,
+  "marvis.autonomy.idleDelayMs": 1200,
+  "marvis.autonomy.heartbeatIntervalMs": 7000,
+  "marvis.thinkingMode": "auto",
+  "marvisDemo.autoRun": true,
+  "marvisDemo.stageDelayMs": 25000,
+  "javascript.implicitProjectConfig.checkJs": true
+}

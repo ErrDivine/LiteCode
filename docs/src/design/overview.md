@@ -24,7 +24,7 @@ The runtime is built around four internal contracts:
 | Thread runtime | `crates/session-kernel` | Owns submissions, active turns, cancellation, history, event emission, and persistence integration. |
 | Scheduler | `crates/scheduler` | Converts thread state into model chat messages, streams deltas, executes tool calls, and returns final response items. |
 | UI bridge | `crates/ui-bridge` | Converts kernel events into CLI, web, and VSCode-facing formats. |
-| PAVE router | `crates/pave-router` | Scores LLM-segmented tasks against configured agent profiles. |
+| PAVE router | `crates/pave-router` | Scores LLM-segmented tasks against runtime-generated skill/toolset agent identities. |
 
 Everything else supports these contracts:
 
@@ -56,7 +56,7 @@ The runtime already supports:
 - Thread resume and fork basics.
 - VSCode status ingestion.
 - Autonomous VSCode wake-up checks with suggest-first PAVE routed tasks.
-- OpenAI-compatible provider configuration through `MARVIS_API_KEY` and `MARVIS_BASE_URL`.
+- OpenAI-compatible provider configuration through VSCode settings for the VSCode product and environment variables for CLI/web modes.
 
 Areas that are intentionally still simple:
 

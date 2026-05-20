@@ -222,91 +222,15 @@ struct PolicyFile {
 
 struct BundledSkillFile {
     relative_path: &'static str,
-    contents: &'static str,
+    contents: &'static [u8],
 }
 
 struct BundledSkillPackage {
-    id: &'static str,
+    bundle_path: &'static str,
     files: &'static [BundledSkillFile],
 }
 
-const BUNDLED_SKILLS: &[BundledSkillPackage] = &[
-    BundledSkillPackage {
-        id: "rust-diagnostic-repair",
-        files: &[
-            BundledSkillFile {
-                relative_path: "SKILL.md",
-                contents: include_str!("../skills/system/rust-diagnostic-repair/SKILL.md"),
-            },
-            BundledSkillFile {
-                relative_path: "agents/openai.yaml",
-                contents: include_str!(
-                    "../skills/system/rust-diagnostic-repair/agents/openai.yaml"
-                ),
-            },
-            BundledSkillFile {
-                relative_path: "references/diagnostic-workflow.md",
-                contents: include_str!(
-                    "../skills/system/rust-diagnostic-repair/references/diagnostic-workflow.md"
-                ),
-            },
-            BundledSkillFile {
-                relative_path: "scripts/summarize-rust-diagnostics.py",
-                contents: include_str!(
-                    "../skills/system/rust-diagnostic-repair/scripts/summarize-rust-diagnostics.py"
-                ),
-            },
-        ],
-    },
-    BundledSkillPackage {
-        id: "test-failure-triage",
-        files: &[
-            BundledSkillFile {
-                relative_path: "SKILL.md",
-                contents: include_str!("../skills/system/test-failure-triage/SKILL.md"),
-            },
-            BundledSkillFile {
-                relative_path: "agents/openai.yaml",
-                contents: include_str!("../skills/system/test-failure-triage/agents/openai.yaml"),
-            },
-            BundledSkillFile {
-                relative_path: "references/triage-checklist.md",
-                contents: include_str!(
-                    "../skills/system/test-failure-triage/references/triage-checklist.md"
-                ),
-            },
-            BundledSkillFile {
-                relative_path: "scripts/extract-failing-tests.py",
-                contents: include_str!(
-                    "../skills/system/test-failure-triage/scripts/extract-failing-tests.py"
-                ),
-            },
-        ],
-    },
-    BundledSkillPackage {
-        id: "repo-explainer",
-        files: &[
-            BundledSkillFile {
-                relative_path: "SKILL.md",
-                contents: include_str!("../skills/system/repo-explainer/SKILL.md"),
-            },
-            BundledSkillFile {
-                relative_path: "agents/openai.yaml",
-                contents: include_str!("../skills/system/repo-explainer/agents/openai.yaml"),
-            },
-            BundledSkillFile {
-                relative_path: "references/repo-map.md",
-                contents: include_str!("../skills/system/repo-explainer/references/repo-map.md"),
-            },
-            BundledSkillFile {
-                relative_path: "scripts/file-type-summary.py",
-                contents: include_str!(
-                    "../skills/system/repo-explainer/scripts/file-type-summary.py"
-                ),
-            },
-        ],
-    },
-];
+include!(concat!(env!("OUT_DIR"), "/bundled_skills.rs"));
 
 pub fn load_skill_packages(workspace_root: &Path) -> SkillLoadOutcome {
     let mut outcome = SkillLoadOutcome::default();
@@ -415,14 +339,14 @@ fn install_bundled_skills(workspace_root: &Path, errors: &mut Vec<String>) -> Op
 
 fn write_bundled_skills_to_root(root: &Path) -> Result<()> {
     for package in BUNDLED_SKILLS {
-        let package_root = root.join(package.id);
+        let package_root = root.join(package.bundle_path);
         for file in package.files {
             let target = package_root.join(file.relative_path);
             if let Some(parent) = target.parent() {
                 std::fs::create_dir_all(parent)
                     .with_context(|| format!("create {}", parent.display()))?;
             }
-            let needs_write = std::fs::read_to_string(&target)
+            let needs_write = std::fs::read(&target)
                 .map(|existing| existing != file.contents)
                 .unwrap_or(true);
             if needs_write {
@@ -722,20 +646,13 @@ fn resolve_asset_path(skill_dir: &Path, path: Option<&PathBuf>) -> Result<Option
 
 fn collect_skill_resources(skill_dir: &Path) -> Result<Vec<SkillResource>> {
     let mut resources = Vec::new();
-    for (folder, kind) in [
-        ("scripts", SkillResourceKind::Script),
-        ("references", SkillResourceKind::Reference),
-        ("assets", SkillResourceKind::Asset),
-    ] {
-        collect_resources_under(
-            skill_dir,
-            Path::new(folder),
-            kind,
-            &mut resources,
-            0,
-            &mut BTreeSet::new(),
-        )?;
-    }
+    collect_resources_under(
+        skill_dir,
+        Path::new(""),
+        &mut resources,
+        0,
+        &mut BTreeSet::new(),
+    )?;
     resources.sort_by(|left, right| left.relative_path.cmp(&right.relative_path));
     if resources.len() > MAX_RESOURCES_PER_SKILL {
         resources.truncate(MAX_RESOURCES_PER_SKILL);
@@ -746,7 +663,6 @@ fn collect_skill_resources(skill_dir: &Path) -> Result<Vec<SkillResource>> {
 fn collect_resources_under(
     skill_dir: &Path,
     relative_dir: &Path,
-    kind: SkillResourceKind,
     resources: &mut Vec<SkillResource>,
     depth: usize,
     visited: &mut BTreeSet<PathBuf>,
@@ -777,8 +693,10 @@ fn collect_resources_under(
         }
         let relative = relative_dir.join(file_name);
         if metadata.is_dir() {
-            collect_resources_under(skill_dir, &relative, kind, resources, depth + 1, visited)?;
-        } else if metadata.is_file() {
+            collect_resources_under(skill_dir, &relative, resources, depth + 1, visited)?;
+        } else if metadata.is_file()
+            && let Some(kind) = classify_skill_resource(&relative)
+        {
             resources.push(SkillResource {
                 kind,
                 relative_path: relative,
@@ -787,6 +705,40 @@ fn collect_resources_under(
         }
     }
     Ok(())
+}
+
+fn classify_skill_resource(relative_path: &Path) -> Option<SkillResourceKind> {
+    if relative_path == Path::new(SKILL_FILE_NAME) {
+        return None;
+    }
+    let mut components = relative_path.components();
+    let first = match components.next() {
+        Some(Component::Normal(value)) => value.to_string_lossy(),
+        _ => return None,
+    };
+    if first == "agents" {
+        return (!matches!(
+            relative_path.file_name().and_then(|value| value.to_str()),
+            Some(OPENAI_METADATA_FILE_NAME | OPENAI_METADATA_JSON_FILE_NAME)
+        ))
+        .then_some(SkillResourceKind::Reference);
+    }
+    if first == "scripts" {
+        return Some(SkillResourceKind::Script);
+    }
+    if first == "assets" || first == "canvas-fonts" {
+        return Some(SkillResourceKind::Asset);
+    }
+    match relative_path
+        .extension()
+        .and_then(|value| value.to_str())
+        .map(|value| value.to_ascii_lowercase())
+        .as_deref()
+    {
+        Some("png" | "jpg" | "jpeg" | "gif" | "svg" | "webp" | "ttf" | "otf" | "woff")
+        | Some("woff2" | "pdf" | "gz" | "zip") => Some(SkillResourceKind::Asset),
+        _ => Some(SkillResourceKind::Reference),
+    }
 }
 
 fn dedupe_and_sort_skills(skills: &mut Vec<SkillDescriptor>, errors: &mut Vec<String>) {
@@ -1283,6 +1235,11 @@ mod tests {
     fn bundled_skills_are_file_backed() {
         let root = temp_root("bundled");
         let outcome = load_skill_packages(&root);
+        assert!(
+            outcome.errors.is_empty(),
+            "bundled skill load errors: {:?}",
+            outcome.errors
+        );
         let skill = outcome
             .skills
             .iter()
@@ -1295,6 +1252,75 @@ mod tests {
                 && resource
                     .relative_path
                     .ends_with("references/diagnostic-workflow.md")
+        }));
+    }
+
+    #[test]
+    fn bundled_imported_skills_are_registered_with_resources() {
+        let root = temp_root("bundled-imports");
+        let outcome = load_skill_packages(&root);
+        assert!(
+            outcome.errors.is_empty(),
+            "bundled skill load errors: {:?}",
+            outcome.errors
+        );
+        let ids = outcome
+            .skills
+            .iter()
+            .map(|skill| skill.id.as_str())
+            .collect::<BTreeSet<_>>();
+        for expected in [
+            "algorithmic-art",
+            "frontend-design",
+            "docx",
+            "webapp-testing",
+            "generate-benchmark-api",
+            "transplant-code",
+        ] {
+            assert!(ids.contains(expected), "missing bundled skill {expected}");
+        }
+
+        let algorithmic_art = outcome
+            .skills
+            .iter()
+            .find(|skill| skill.id == "algorithmic-art")
+            .unwrap();
+        assert!(algorithmic_art.resources.iter().any(|resource| {
+            resource.kind == SkillResourceKind::Reference
+                && resource.relative_path == PathBuf::from("templates/viewer.html")
+        }));
+
+        let canvas_design = outcome
+            .skills
+            .iter()
+            .find(|skill| skill.id == "canvas-design")
+            .unwrap();
+        assert!(canvas_design.resources.iter().any(|resource| {
+            resource.kind == SkillResourceKind::Asset
+                && resource
+                    .relative_path
+                    .starts_with(Path::new("canvas-fonts"))
+        }));
+
+        let docx = outcome
+            .skills
+            .iter()
+            .find(|skill| skill.id == "docx")
+            .unwrap();
+        assert!(docx.local_tools.contains(&"run_skill_script".to_string()));
+        assert!(docx.resources.iter().any(|resource| {
+            resource.kind == SkillResourceKind::Script
+                && resource.relative_path == PathBuf::from("scripts/accept_changes.py")
+        }));
+
+        let skill_creator = outcome
+            .skills
+            .iter()
+            .find(|skill| skill.id == "skill-creator")
+            .unwrap();
+        assert!(skill_creator.resources.iter().any(|resource| {
+            resource.kind == SkillResourceKind::Reference
+                && resource.relative_path == PathBuf::from("agents/analyzer.md")
         }));
     }
 }

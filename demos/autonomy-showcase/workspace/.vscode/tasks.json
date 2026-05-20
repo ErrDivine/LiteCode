@@ -1,0 +1,35 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Marvis demo: order total test trap",
+      "type": "shell",
+      "command": "node tests/orderTotals.test.js",
+      "problemMatcher": []
+    },
+    {
+      "label": "Marvis demo: discount rule test trap",
+      "type": "shell",
+      "command": "node tests/discountRules.test.js",
+      "problemMatcher": []
+    },
+    {
+      "label": "Marvis demo: shipping label refactor trap",
+      "type": "shell",
+      "command": "node tests/shippingLabels.test.js",
+      "problemMatcher": []
+    },
+    {
+      "label": "Marvis demo: dashboard accessibility trap",
+      "type": "shell",
+      "command": "node scripts/checkDashboardA11y.js",
+      "problemMatcher": []
+    },
+    {
+      "label": "Marvis demo: release notes check trap",
+      "type": "shell",
+      "command": "node scripts/checkReleaseNotes.js",
+      "problemMatcher": []
+    }
+  ]
+}

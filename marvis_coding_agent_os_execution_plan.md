@@ -2360,9 +2360,9 @@ Create the segment registry and invalidation rules.
 
 #### Current Implementation Notes
 
-- `crates/pave-router` implements Rust JSON PAVE vectors, cosine scoring, task candidates, agent profiles, and route decisions.
-- VSCode settings provide `marvis.agentProfiles`; Rust uses built-in Rust diagnostic, test triage, and repo explainer profiles only as validated default profiles when no valid custom profiles are configured.
-- Agent profiles can name concrete `skills` and `mcp_servers`; `src/skills.rs` loads bundled/workspace Codex-style skill packages, and `src/skill_mcp.rs` resolves those packages with selected stdio MCP servers.
+- `crates/pave-router` implements Rust JSON PAVE vectors, cosine scoring, task candidates, generated agent identities, and route decisions.
+- VSCode settings provide only the shared model/provider/runtime controls. Rust auto-detects bundled/workspace `SKILL.md` packages plus built-in toolsets and turns them into same-model agent identities.
+- Generated agent identities are keyed by skills or toolsets: skill agents carry concrete `skills`, local tool dependencies, derived approval defaults, and declared MCP dependencies; `src/skill_mcp.rs` resolves those packages with selected stdio MCP servers.
 - Stdio MCP servers are loaded from `.marvis/mcp.json` or `.mcp.json`, initialized with JSON-RPC, discovered through `tools/list`, and exposed only when discovery succeeds. Selected required MCP servers fail closed when missing, disabled, failing, or tool-less.
 - Stdio MCP startup requires shell approval because it launches a local process.
 - Accepted autonomous suggestions execute with capped permissions from the routed profile; stdio clients cannot broaden a suggestion into risky shell/git/network access.
@@ -2407,7 +2407,7 @@ Create the segment registry and invalidation rules.
 
 - Improve VSCode UI for task/process/status surfaces.
 - Add crash recovery for active threads.
-- Add repo policy profiles.
+- Add repo policy overlays for generated skill/toolset agents.
 - Add model provider configuration.
 - Add secret/risk scanning.
 - Keep CLI/web as harnesses only; do not let them replace VSCode product work.
@@ -3319,7 +3319,7 @@ The highest-priority implementation order is:
 - [ ] critic for medium/high-risk tasks
 - [ ] summarizer
 - [ ] repair loop
-- [x] PAVE route scoring against configured agent profiles
+- [x] PAVE route scoring against runtime-generated skill/toolset agent identities
 - [x] suggest-first autonomous wake-up loop
 
 ### Tools

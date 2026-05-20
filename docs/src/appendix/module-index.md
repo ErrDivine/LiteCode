@@ -6,8 +6,10 @@ This index lists every source module and its design responsibility.
 
 | File | Responsibility |
 | --- | --- |
+| `build.rs` | Generates the binary-safe bundled skill catalog from `skills/system/**/SKILL.md`. |
 | `src/main.rs` | Binary entrypoint, CLI parsing, mode selection, runtime composition, CLI loop, shared system prompt. |
 | `src/autonomy.rs` | Autonomous wake-up coordinator, LLM problem segmentation, suggestion cooldowns, PAVE routing, accepted suggestion prompt building. |
+| `src/skills.rs` | Codex-style skill package loading, bundled skill materialization, resource indexing, and selected skill prompt rendering. |
 | `src/skill_mcp.rs` | Skill registry, selected skill rendering, stdio MCP discovery, tool qualification, and MCP tool calls. |
 | `src/web.rs` | Axum web harness, static HTML serving, chat endpoint, SSE event stream, web thread setup. |
 | `src/vscode.rs` | VSCode stdio server, request dispatch, status store integration, context capsule submission, streamed VSCode events. |
@@ -21,6 +23,15 @@ This index lists every source module and its design responsibility.
 | `apps/vscode-extension/package.json` | Extension manifest, activation events, commands, menus, settings, scripts. |
 | `apps/vscode-extension/extension.js` | Extension controller, runtime child process client, status collection, webview panel, code actions. |
 | `apps/vscode-extension/README.md` | Development launch guide. |
+
+## Demo Workspaces
+
+| File | Responsibility |
+| --- | --- |
+| `demos/autonomy-showcase/launch.sh` | Builds the debug runtime and opens VSCode with the Marvis and demo-driver development extensions. |
+| `demos/autonomy-showcase/scripts/verify-traps.js` | Headless verifier that ensures the clean demo workspace passes and each timed trap produces a failing task signal. |
+| `demos/autonomy-showcase/driver-extension/extension.js` | Drives the timed autonomy showcase by resetting files, focusing editor context, running tasks, and waiting for Marvis. |
+| `demos/autonomy-showcase/workspace` | Disposable JavaScript and documentation project used by the showcase traps. |
 
 ## `crates/protocol`
 
@@ -71,7 +82,7 @@ This index lists every source module and its design responsibility.
 
 | File | Responsibility |
 | --- | --- |
-| `crates/pave-router/src/lib.rs` | Sparse PAVE vectors, tool access flags, agent profiles, task candidates, route scoring, default profiles. |
+| `crates/pave-router/src/lib.rs` | Sparse PAVE vectors, tool access flags, generated agent identities, task candidates, and route scoring. |
 
 ## Persistence
 

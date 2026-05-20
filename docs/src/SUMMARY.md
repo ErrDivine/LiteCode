@@ -2,6 +2,8 @@
 
 [Home](README.md)
 
+- [Quick Start](quick-start.md)
+
 # Design
 
 - [Product And Runtime Overview](design/overview.md)
@@ -29,6 +31,7 @@
 # Applications
 
 - [VSCode Extension](apps/vscode-extension.md)
+- [Autonomy Showcase Demo](apps/autonomy-showcase.md)
 
 # Operations
 

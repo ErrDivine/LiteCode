@@ -4,7 +4,7 @@ use std::process::Stdio;
 use std::time::Duration;
 
 use anyhow::{Context, Result, anyhow};
-use pave_router::AgentProfile;
+use pave_router::{AgentProfile, PaveVector, ToolAccess, normalize_profiles};
 use protocol::DynamicToolSpec;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -44,6 +44,23 @@ impl SkillRegistry {
 
     pub fn errors(&self) -> &[String] {
         &self.errors
+    }
+
+    pub fn auto_agent_profiles(&self, default_model: &str) -> Vec<AgentProfile> {
+        let mut profiles = Vec::new();
+        for skill in self.skills.values() {
+            if skill
+                .policy
+                .as_ref()
+                .and_then(|policy| policy.allow_implicit_invocation)
+                == Some(false)
+            {
+                continue;
+            }
+            profiles.push(agent_profile_for_skill(skill, default_model));
+        }
+        profiles.extend(toolset_agent_profiles(default_model));
+        normalize_profiles(profiles)
     }
 
     pub fn resolve_agent(&self, agent: &AgentProfile) -> AgentSkillSelection {
@@ -161,6 +178,322 @@ impl SkillRegistry {
             self.mcp_servers.insert(name, config);
         }
     }
+}
+
+fn agent_profile_for_skill(skill: &SkillDescriptor, default_model: &str) -> AgentProfile {
+    let tool_allowlist = skill_tool_allowlist(skill);
+    let default_approval = approval_for_tools(&tool_allowlist, has_mcp_dependency(skill));
+    AgentProfile {
+        id: skill.id.clone(),
+        label: skill
+            .interface
+            .as_ref()
+            .and_then(|interface| interface.display_name.clone())
+            .unwrap_or_else(|| skill.name.clone()),
+        model: default_model.to_string(),
+        skills: vec![skill.id.clone()],
+        mcp_servers: Vec::new(),
+        skill_prompt: skill_agent_instruction(skill),
+        tool_allowlist: tool_allowlist.clone(),
+        pave: pave_for_skill(skill, &tool_allowlist, default_approval),
+        default_approval,
+    }
+}
+
+fn toolset_agent_profiles(default_model: &str) -> Vec<AgentProfile> {
+    vec![
+        AgentProfile {
+            id: "tools-read-only".to_string(),
+            label: "Read-Only Tools".to_string(),
+            model: default_model.to_string(),
+            skills: Vec::new(),
+            mcp_servers: Vec::new(),
+            skill_prompt:
+                "Use workspace read/search, symbol, git status, and git diff tools to inspect and explain focused codebase questions."
+                    .to_string(),
+            tool_allowlist: read_only_tools()
+                .into_iter()
+                .map(str::to_string)
+                .collect(),
+            pave: PaveVector::new([
+                ("explanation", 1.0),
+                ("docs", 0.55),
+                ("git", 0.35),
+                ("risk_low", 0.7),
+            ]),
+            default_approval: ToolAccess::read_only(),
+        },
+        AgentProfile {
+            id: "tools-verification".to_string(),
+            label: "Verification Tools".to_string(),
+            model: default_model.to_string(),
+            skills: Vec::new(),
+            mcp_servers: Vec::new(),
+            skill_prompt:
+                "Use build, test, formatter, read/search, and git inspection tools to verify a focused failure or recently changed code."
+                    .to_string(),
+            tool_allowlist: verification_tools()
+                .into_iter()
+                .map(str::to_string)
+                .collect(),
+            pave: PaveVector::new([
+                ("tests", 1.0),
+                ("diagnostics", 0.65),
+                ("shell", 0.55),
+                ("infra", 0.4),
+                ("risk_low", 0.45),
+            ]),
+            default_approval: ToolAccess {
+                allow_workspace_write: false,
+                allow_shell: true,
+                allow_risky_shell: false,
+                allow_git_write: false,
+                allow_network: false,
+            },
+        },
+        AgentProfile {
+            id: "tools-workspace-patch".to_string(),
+            label: "Workspace Patch Tools".to_string(),
+            model: default_model.to_string(),
+            skills: Vec::new(),
+            mcp_servers: Vec::new(),
+            skill_prompt:
+                "Use read/search, patch, rollback, build, test, formatter, and git inspection tools for focused workspace edits after user approval."
+                    .to_string(),
+            tool_allowlist: patch_tools()
+                .into_iter()
+                .map(str::to_string)
+                .collect(),
+            pave: PaveVector::new([
+                ("patch", 1.0),
+                ("refactor", 0.65),
+                ("diagnostics", 0.55),
+                ("tests", 0.45),
+                ("risk_medium", 0.6),
+            ]),
+            default_approval: ToolAccess::patch_and_checks(),
+        },
+    ]
+}
+
+fn skill_agent_instruction(skill: &SkillDescriptor) -> String {
+    let mut parts = vec![format!("Use the `{}` skill package.", skill.id)];
+    if let Some(default_prompt) = skill
+        .interface
+        .as_ref()
+        .and_then(|interface| interface.default_prompt.as_ref())
+        .map(|prompt| prompt.trim())
+        .filter(|prompt| !prompt.is_empty())
+    {
+        parts.push(default_prompt.to_string());
+    } else if !skill.description.trim().is_empty() {
+        parts.push(skill.description.trim().to_string());
+    }
+    parts.join(" ")
+}
+
+fn skill_tool_allowlist(skill: &SkillDescriptor) -> Vec<String> {
+    let mut tools = BTreeSet::new();
+    if skill.local_tools.is_empty() {
+        tools.extend(read_only_tools().into_iter().map(str::to_string));
+    } else {
+        tools.extend(skill.local_tools.iter().cloned());
+    }
+    if !skill.resources.is_empty() {
+        tools.extend(skill_resource_tools().into_iter().map(str::to_string));
+    }
+    tools.into_iter().collect()
+}
+
+fn has_mcp_dependency(skill: &SkillDescriptor) -> bool {
+    skill
+        .mcp_dependencies
+        .iter()
+        .any(|dependency| dependency.kind.eq_ignore_ascii_case("mcp"))
+}
+
+fn approval_for_tools(tools: &[String], starts_mcp: bool) -> ToolAccess {
+    let contains = |names: &[&str]| tools.iter().any(|tool| names.contains(&tool.as_str()));
+    ToolAccess {
+        allow_workspace_write: contains(&[
+            "write_file",
+            "edit_file",
+            "apply_patch",
+            "restore_rollback",
+        ]),
+        allow_shell: starts_mcp
+            || contains(&[
+                "shell",
+                "run_test",
+                "run_build",
+                "run_formatter",
+                "run_skill_script",
+            ]),
+        allow_risky_shell: contains(&["run_skill_script"]),
+        allow_git_write: contains(&["git_write", "git_commit", "git_apply"]),
+        allow_network: contains(&["network", "web_search", "fetch_url"]),
+    }
+}
+
+fn pave_for_skill(
+    skill: &SkillDescriptor,
+    tool_allowlist: &[String],
+    approval: ToolAccess,
+) -> PaveVector {
+    let mut dims = BTreeMap::new();
+    let text = format!(
+        "{} {} {} {} {}",
+        skill.id,
+        skill.name,
+        skill.description,
+        skill.short_description.clone().unwrap_or_default(),
+        tool_allowlist.join(" ")
+    )
+    .to_ascii_lowercase();
+
+    add_keywords(
+        &mut dims,
+        &text,
+        "rust",
+        &["rust", "cargo", "borrow", "clippy", ".rs"],
+        1.0,
+    );
+    add_keywords(
+        &mut dims,
+        &text,
+        "javascript",
+        &["javascript", "typescript", "node", "npm", ".js", ".ts"],
+        0.85,
+    );
+    add_keywords(
+        &mut dims,
+        &text,
+        "tests",
+        &["test", "tests", "failing", "assert", "panic"],
+        1.0,
+    );
+    add_keywords(
+        &mut dims,
+        &text,
+        "diagnostics",
+        &["diagnostic", "compiler", "error", "failure", "warning"],
+        0.9,
+    );
+    add_keywords(
+        &mut dims,
+        &text,
+        "explanation",
+        &[
+            "explain",
+            "explainer",
+            "inspect",
+            "relationship",
+            "structure",
+        ],
+        0.9,
+    );
+    add_keywords(
+        &mut dims,
+        &text,
+        "docs",
+        &["doc", "docs", "markdown", "readme", "reference"],
+        0.65,
+    );
+    add_keywords(
+        &mut dims,
+        &text,
+        "frontend",
+        &["frontend", "vscode", "webview", "ui", "extension"],
+        0.75,
+    );
+    add_keywords(
+        &mut dims,
+        &text,
+        "infra",
+        &["build", "ci", "mcp", "server", "runtime"],
+        0.55,
+    );
+
+    if tool_allowlist.iter().any(|tool| {
+        matches!(
+            tool.as_str(),
+            "write_file" | "edit_file" | "apply_patch" | "restore_rollback"
+        )
+    }) {
+        dims.insert("patch".to_string(), 0.9);
+        dims.entry("refactor".to_string()).or_insert(0.45);
+    }
+    if tool_allowlist.iter().any(|tool| {
+        matches!(
+            tool.as_str(),
+            "run_test" | "run_build" | "run_formatter" | "shell"
+        )
+    }) {
+        dims.entry("shell".to_string()).or_insert(0.45);
+    }
+    if tool_allowlist
+        .iter()
+        .any(|tool| matches!(tool.as_str(), "git_status" | "git_diff"))
+    {
+        dims.entry("git".to_string()).or_insert(0.35);
+    }
+    if approval.allow_workspace_write {
+        dims.insert("risk_medium".to_string(), 0.55);
+    } else {
+        dims.insert("risk_low".to_string(), 0.55);
+    }
+    if dims.is_empty() {
+        dims.insert("explanation".to_string(), 0.35);
+        dims.insert("risk_low".to_string(), 0.35);
+    }
+    PaveVector { dims }
+}
+
+fn add_keywords(
+    dims: &mut BTreeMap<String, f32>,
+    text: &str,
+    dimension: &str,
+    keywords: &[&str],
+    value: f32,
+) {
+    if keywords.iter().any(|keyword| text.contains(keyword)) {
+        dims.insert(dimension.to_string(), value);
+    }
+}
+
+fn read_only_tools() -> Vec<&'static str> {
+    vec![
+        "read_file",
+        "read_many_files",
+        "search_files",
+        "find_files",
+        "list_directory",
+        "list_symbols",
+        "git_status",
+        "git_diff",
+    ]
+}
+
+fn skill_resource_tools() -> Vec<&'static str> {
+    vec!["list_skills", "list_skill_resources", "read_skill_resource"]
+}
+
+fn verification_tools() -> Vec<&'static str> {
+    let mut tools = read_only_tools();
+    tools.extend(["run_test", "run_build", "run_formatter"]);
+    tools
+}
+
+fn patch_tools() -> Vec<&'static str> {
+    let mut tools = verification_tools();
+    tools.extend([
+        "write_file",
+        "edit_file",
+        "apply_patch",
+        "list_rollbacks",
+        "restore_rollback",
+    ]);
+    tools
 }
 
 #[derive(Debug, Clone, Default)]
@@ -835,6 +1168,119 @@ mod tests {
         assert_eq!(skill.local_tools, vec!["read_file", "run_build"]);
         assert_eq!(skill.mcp_dependencies[0].value, "docs");
         assert!(registry.mcp_servers.contains_key("docs"));
+    }
+
+    #[test]
+    fn auto_agent_profiles_are_generated_from_discovered_skills_and_tools() {
+        let root =
+            std::env::temp_dir().join(format!("marvis-auto-agent-test-{}", std::process::id()));
+        let skill_dir = root.join(".marvis/skills/frontend-helper");
+        std::fs::create_dir_all(skill_dir.join("agents")).unwrap();
+        std::fs::create_dir_all(skill_dir.join("references")).unwrap();
+        std::fs::write(
+            skill_dir.join(crate::skills::SKILL_FILE_NAME),
+            "---\nname: Frontend Helper\ndescription: Fix VSCode webview frontend issues.\n---\nUse UI context carefully.\n",
+        )
+        .unwrap();
+        std::fs::write(
+            skill_dir.join("agents/openai.yaml"),
+            "capabilities:\n  - read_file\n  - apply_patch\n  - run_build\ninterface:\n  display_name: Frontend Helper Agent\npolicy:\n  allow_implicit_invocation: true\n",
+        )
+        .unwrap();
+        std::fs::write(skill_dir.join("references/guide.md"), "Frontend guide.").unwrap();
+
+        let registry = SkillRegistry::load(&root);
+        let profiles = registry.auto_agent_profiles("same-model");
+        let profile = profiles
+            .iter()
+            .find(|profile| profile.id == "frontend-helper")
+            .expect("workspace skill should become an agent");
+
+        assert_eq!(profile.model, "same-model");
+        assert_eq!(profile.skills, vec!["frontend-helper"]);
+        assert_eq!(profile.label, "Frontend Helper Agent");
+        assert!(profile.tool_allowlist.contains(&"apply_patch".to_string()));
+        assert!(
+            profile
+                .tool_allowlist
+                .contains(&"read_skill_resource".to_string())
+        );
+        assert!(profile.default_approval.allow_workspace_write);
+        assert!(profile.default_approval.allow_shell);
+        assert!(profile.pave.dims.contains_key("frontend"));
+        assert!(
+            profiles
+                .iter()
+                .any(|profile| profile.id == "tools-workspace-patch"
+                    && profile.model == "same-model")
+        );
+    }
+
+    #[test]
+    fn auto_agent_profiles_skip_skills_that_disallow_implicit_invocation() {
+        let root = std::env::temp_dir().join(format!(
+            "marvis-auto-agent-opt-out-test-{}",
+            std::process::id()
+        ));
+        let skill_dir = root.join(".marvis/skills/manual-only");
+        std::fs::create_dir_all(skill_dir.join("agents")).unwrap();
+        std::fs::write(
+            skill_dir.join(crate::skills::SKILL_FILE_NAME),
+            "---\nname: manual-only\ndescription: Manual only.\n---\nUse only when explicitly selected.\n",
+        )
+        .unwrap();
+        std::fs::write(
+            skill_dir.join("agents/openai.yaml"),
+            "policy:\n  allow_implicit_invocation: false\n",
+        )
+        .unwrap();
+
+        let registry = SkillRegistry::load(&root);
+        let profiles = registry.auto_agent_profiles("same-model");
+        assert!(!profiles.iter().any(|profile| profile.id == "manual-only"));
+    }
+
+    #[test]
+    fn bundled_imported_skills_become_auto_agent_profiles() {
+        let root = std::env::temp_dir().join(format!(
+            "marvis-bundled-imported-agent-test-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+
+        let registry = SkillRegistry::load(&root);
+        assert!(
+            registry.errors().is_empty(),
+            "skill load errors: {:?}",
+            registry.errors()
+        );
+        let profiles = registry.auto_agent_profiles("shared-model");
+
+        let frontend = profiles
+            .iter()
+            .find(|profile| profile.id == "frontend-design")
+            .expect("frontend-design should be auto-routable");
+        assert_eq!(frontend.model, "shared-model");
+        assert!(frontend.skills.contains(&"frontend-design".to_string()));
+        assert!(frontend.tool_allowlist.contains(&"apply_patch".to_string()));
+        assert!(frontend.default_approval.allow_workspace_write);
+
+        let docx = profiles
+            .iter()
+            .find(|profile| profile.id == "docx")
+            .expect("docx should be auto-routable");
+        assert!(
+            docx.tool_allowlist
+                .contains(&"run_skill_script".to_string())
+        );
+        assert!(docx.default_approval.allow_risky_shell);
+
+        let transplant = profiles
+            .iter()
+            .find(|profile| profile.id == "transplant-code")
+            .expect("transplant-code should be auto-routable");
+        assert_eq!(transplant.label, "Transplant Code");
     }
 
     #[test]

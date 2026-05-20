@@ -8,11 +8,11 @@ A Rust coding-agent runtime with a VSCode product shell. The original CLI and we
 - **Structured status**: Builds `CodebaseStatus`, git state, deterministic segments, stuckness hints, and context capsules.
 - **Autonomous suggestions**: VSCode wake-up timers send status ticks; Rust segments actionable problems with an LLM and suggests useful agent actions.
 - **PAVE routing**: Task vectors are matched against configured agent-profile vectors with cosine scoring.
-- **Skill/MCP routing**: Routed agents resolve concrete built-in or workspace skills and can expose discovered stdio MCP tools without fake fallbacks.
+- **Skill/MCP routing**: Routed agents resolve concrete built-in, imported, or workspace skills and can expose discovered stdio MCP tools without fake fallbacks.
 - **Agent runtime**: Uses `session-kernel` and `scheduler` for streamed model/tool turns.
 - **Tool usage**: The model can execute shell commands and read/write/edit files through policy-gated local tools with rollback snapshots before writes.
 - **Streaming responses**: CLI, web, and VSCode bridge all receive runtime events.
-- **Configurable model provider**: Use any OpenAI-compatible chat completions endpoint through `MARVIS_API_KEY` and `MARVIS_BASE_URL`.
+- **Configurable model provider**: Use any OpenAI-compatible chat completions endpoint. VSCode uses `marvis.apiKey` / `marvis.baseUrl`; CLI and web harnesses use `MARVIS_API_KEY` / `MARVIS_BASE_URL`.
 - **Built with Rust**: Fast, safe, and efficient.
 
 ## Installation
@@ -20,7 +20,7 @@ A Rust coding-agent runtime with a VSCode product shell. The original CLI and we
 ### Prerequisites
 
 - Rust toolchain (version 1.70 or later)
-- An API key for an OpenAI-compatible provider (set it via `MARVIS_API_KEY`; see [Configuration](#configuration))
+- An API key for an OpenAI-compatible provider. Set it in VSCode Settings for the extension, or via `MARVIS_API_KEY` for the CLI/web harnesses.
 
 ### Build from Source
 
@@ -39,7 +39,10 @@ cargo build --release
 ```
 
 ## Usage
-Set `MARVIS_API_KEY` before running LiteCode. Set `MARVIS_BASE_URL` if your provider does not use `https://api.openai.com/v1`.
+
+For the VSCode product, set `marvis.apiKey` in VSCode User or Machine Settings. Set `marvis.baseUrl` if your provider does not use `https://api.openai.com/v1`.
+
+For the CLI and web harnesses, set `MARVIS_API_KEY` before running LiteCode. Set `MARVIS_BASE_URL` if your provider does not use `https://api.openai.com/v1`.
 
 ### Option 1: Set for current terminal session
 
@@ -122,6 +125,16 @@ Useful commands:
 - `Marvis: Run Command and Record Result`
 - `Marvis: Run VSCode Task and Record Result`
 
+## Autonomy Showcase Demo
+
+For a screen-recordable demo of the autonomous scheduler, run:
+
+```bash
+./demos/autonomy-showcase/launch.sh
+```
+
+The launcher opens `demos/autonomy-showcase/workspace` in VSCode with Marvis and a demo driver extension loaded. The driver introduces focused traps, runs matching VSCode tasks, and waits for Marvis to wake up through its normal debounce or heartbeat path.
+
 ### Example
 
 ```bash
@@ -136,7 +149,9 @@ The model will:
 
 ## Configuration
 
-lite-code reads the API key from `MARVIS_API_KEY` at runtime.
+VSCode sends `marvis.apiKey`, `marvis.baseUrl`, `marvis.model`, `marvis.thinkingMode`, `marvis.reasoningEffort`, and `marvis.maxTokens` to the runtime during initialization.
+
+The CLI and web harnesses read the API key from `MARVIS_API_KEY` at runtime.
 
 `MARVIS_BASE_URL` defaults to:
 
@@ -144,7 +159,7 @@ lite-code reads the API key from `MARVIS_API_KEY` at runtime.
 https://api.openai.com/v1
 ```
 
-If `MARVIS_API_KEY` is not set, the CLI, web harness, and VSCode runtime return a clear configuration error. The VSCode product no longer falls back to a fake model.
+If `MARVIS_API_KEY` is not set, the CLI and web harnesses return a clear configuration error. If `marvis.apiKey` is not set, the VSCode product returns a clear configuration error. The VSCode product no longer falls back to a fake model.
 
 ## How It Works
 
@@ -152,7 +167,7 @@ VSCode sends live editor status to the Rust stdio bridge. The Rust runtime turns
 
 When autonomy is enabled, the extension also sends debounced status ticks after meaningful VSCode activity and a low-frequency heartbeat while the runtime is active. Rust checks whether the status is actionable, asks the configured model to segment concrete tasks, routes each task through PAVE cosine scoring against configured agent profiles, and returns either `idle`, `suppressed`, or a suggestion. Suggestions do not run until the user accepts them.
 
-Accepted suggestions execute with the routed agent's capped permissions. Agent profiles can name real skills and MCP servers; workspace skills live under `.marvis/skills/<skill>/SKILL.md` or `.agents/skills/<skill>/SKILL.md`, and stdio MCP servers are read from `.marvis/mcp.json` or `.mcp.json`. Write tools create restoreable preimage snapshots under `.marvis/rollback`.
+Accepted suggestions execute with the routed agent's capped permissions. Agent profiles are generated from real skills and MCP servers; bundled imported skills live under `skills/system`, workspace skills live under `.marvis/skills/<skill>/SKILL.md` or `.agents/skills/<skill>/SKILL.md`, and stdio MCP servers are read from `.marvis/mcp.json` or `.mcp.json`. Write tools create restoreable preimage snapshots under `.marvis/rollback`.
 
 ## Project Structure
 

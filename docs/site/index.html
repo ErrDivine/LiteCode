@@ -163,6 +163,7 @@
 <tr><td><code>apps/vscode-extension</code></td><td>VSCode product shell. It collects editor context and speaks newline-delimited JSON to the Rust binary.</td></tr>
 <tr><td><code>src/main.rs</code></td><td>Binary entrypoint. It selects CLI, web, or VSCode stdio mode.</td></tr>
 <tr><td><code>src/tools.rs</code></td><td>Current local tool executor for shell, file read/write/edit, directory listing, search, glob discovery, safe test/build helpers, and runtime policy gates.</td></tr>
+<tr><td><code>src/skills.rs</code></td><td>Codex-style skill package loading, bundled skill materialization, and resource indexing.</td></tr>
 <tr><td><code>src/skill_mcp.rs</code></td><td>Skill registry, selected skill injection, stdio MCP discovery, and MCP tool execution.</td></tr>
 <tr><td><code>src/web.rs</code></td><td>Temporary HTTP/SSE web harness.</td></tr>
 <tr><td><code>src/vscode.rs</code></td><td>Runtime side of the VSCode stdio bridge.</td></tr>
@@ -171,7 +172,7 @@
 <tr><td><code>crates/scheduler</code></td><td>Model turn execution against OpenAI-compatible chat completions plus a synthetic scheduler used only by tests/dev code.</td></tr>
 <tr><td><code>crates/openai-rs</code></td><td>Reusable OpenAI-compatible HTTP and streaming client.</td></tr>
 <tr><td><code>crates/status</code></td><td>VSCode/codebase status model, deterministic segments, stuckness detection, git state, and context capsules.</td></tr>
-<tr><td><code>crates/pave-router</code></td><td>Rust JSON PAVE vectors, agent profiles, task candidates, and route scoring.</td></tr>
+<tr><td><code>crates/pave-router</code></td><td>Rust JSON PAVE vectors, generated agent identities, task candidates, and route scoring.</td></tr>
 <tr><td><code>crates/ui-bridge</code></td><td>Adapters from kernel events into CLI, web SSE, and VSCode runtime event shapes.</td></tr>
 <tr><td><code>crates/rollout</code></td><td>JSONL session recording and listing.</td></tr>
 <tr><td><code>crates/thread-store</code></td><td>Storage-neutral thread persistence interface with local JSONL history and sidecar metadata.</td></tr>
@@ -180,7 +181,7 @@
 </tbody></table>
 </div>
 <h2 id="reading-path"><a class="header" href="#reading-path">Reading Path</a></h2>
-<p>Start with <a href="design/overview.html">Product And Runtime Overview</a>, then <a href="design/architecture.html">Architecture</a>, then <a href="design/flows.html">Runtime Flows</a>. After that, each crate page can be read independently.</p>
+<p>Start with <a href="quick-start.html">Quick Start</a> if you want to run Marvis in VSCode. Use <a href="apps/autonomy-showcase.html">Autonomy Showcase Demo</a> when you need a screen-recordable walkthrough of the autonomous scheduler. For implementation context, read <a href="design/overview.html">Product And Runtime Overview</a>, then <a href="design/architecture.html">Architecture</a>, then <a href="design/flows.html">Runtime Flows</a>. After that, each crate page can be read independently.</p>
 <p>For interface-level lookup, use:</p>
 <ul>
 <li><a href="appendix/module-index.html">Module Index</a> for file-by-file responsibilities.</li>
@@ -197,7 +198,7 @@
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
 
-                            <a rel="next prefetch" href="design/overview.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                            <a rel="next prefetch" href="quick-start.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <i class="fa fa-angle-right"></i>
                             </a>
 
@@ -208,7 +209,7 @@
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
 
-                    <a rel="next prefetch" href="design/overview.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                    <a rel="next prefetch" href="quick-start.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <i class="fa fa-angle-right"></i>
                     </a>
             </nav>

@@ -183,14 +183,17 @@
 <div class="table-wrapper"><table><thead><tr><th>Setting</th><th>Default</th><th>Meaning</th></tr></thead><tbody>
 <tr><td><code>marvis.runtimePath</code></td><td>empty</td><td>Optional path to the <code>lite-code</code> binary.</td></tr>
 <tr><td><code>marvis.model</code></td><td><code>gpt-4.1-mini</code></td><td>Model passed to the Rust runtime.</td></tr>
+<tr><td><code>marvis.apiKey</code></td><td>empty</td><td>API key for the OpenAI-compatible provider used by the VSCode runtime.</td></tr>
 <tr><td><code>marvis.baseUrl</code></td><td>empty</td><td>Optional OpenAI-compatible base URL. Empty means use <code>MARVIS_BASE_URL</code> or <code>https://api.openai.com/v1</code>.</td></tr>
+<tr><td><code>marvis.thinkingMode</code></td><td><code>auto</code></td><td>Thinking mode for compatible providers. <code>auto</code> disables DeepSeek thinking and omits the parameter elsewhere.</td></tr>
+<tr><td><code>marvis.reasoningEffort</code></td><td>empty</td><td>Optional <code>low</code>, <code>medium</code>, or <code>high</code> reasoning effort for compatible providers.</td></tr>
 <tr><td><code>marvis.maxTokens</code></td><td><code>4096</code></td><td>Maximum response tokens per model turn.</td></tr>
 <tr><td><code>marvis.autonomy.enabled</code></td><td><code>true</code></td><td>Enables suggest-first autonomous status checks.</td></tr>
 <tr><td><code>marvis.autonomy.idleDelayMs</code></td><td><code>3000</code></td><td>Debounce delay before a quiet status check.</td></tr>
 <tr><td><code>marvis.autonomy.heartbeatIntervalMs</code></td><td><code>30000</code></td><td>Low-frequency heartbeat interval while the runtime is active.</td></tr>
-<tr><td><code>marvis.agentProfiles</code></td><td>built-in Rust/test/explainer profiles</td><td>Agent model names, skill ids, MCP server ids, tool allowlists, approval defaults, and PAVE vectors.</td></tr>
 </tbody></table>
 </div>
+<p>Agent identities are not configured in VSCode settings. The runtime reloads bundled Marvis/imported skills, workspace <code>SKILL.md</code> packages, and local tool functions, then synthesizes same-model agents from those skills, their declared tool dependencies, declared MCP dependencies, and built-in read-only/verification/patch toolsets.</p>
 <h2 id="activation"><a class="header" href="#activation">Activation</a></h2>
 <p>The extension activates on startup and on each Marvis command. <code>activate(context)</code> creates:</p>
 <ul>
@@ -291,7 +294,7 @@
 <li><code>truncateTail</code></li>
 </ul>
 <p><code>collectStatus</code> sends active editor, open editors, visible ranges, selections, cursor bubble, recent files, diagnostics, terminal-like command results, running tasks, debug sessions, trust state, remote name, and VSCode app/profile name. When VSCode exposes shell-integration events, Marvis also records completed terminal shell executions and their output tail.</p>
-<p>Autonomy ticks are sent after diagnostics, saves, command/task results, debug termination, quiet editor changes, and the heartbeat. The extension does not start tool execution from a tick; it displays the returned suggestion and sends <code>run_suggested_task</code> only after acceptance.</p>
+<p>Autonomy ticks are sent after diagnostics, saves, command/task results, debug termination, quiet editor changes, and the heartbeat. The runtime stays idle for unchanged, busy, ambiguous, or merely dirty/risky snapshots. When status points to a focused, useful next step, the LLM is prompted to proactively infer the user's intent, select an auto-detected skill/toolset agent, and return a suggest-first task. The extension asks for user acceptance before sending <code>run_suggested_task</code>.</p>
 <h2 id="webview-panel"><a class="header" href="#webview-panel">Webview Panel</a></h2>
 <p><code>renderPanelHtml()</code> returns a self-contained HTML document with:</p>
 <ul>
@@ -322,7 +325,7 @@
                                 <i class="fa fa-angle-left"></i>
                             </a>
 
-                            <a rel="next prefetch" href="../operations/configuration.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                            <a rel="next prefetch" href="../apps/autonomy-showcase.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <i class="fa fa-angle-right"></i>
                             </a>
 
@@ -336,7 +339,7 @@
                         <i class="fa fa-angle-left"></i>
                     </a>
 
-                    <a rel="next prefetch" href="../operations/configuration.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                    <a rel="next prefetch" href="../apps/autonomy-showcase.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <i class="fa fa-angle-right"></i>
                     </a>
             </nav>

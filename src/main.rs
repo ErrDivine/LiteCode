@@ -11,7 +11,7 @@ use std::io::{self, Write};
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use scheduler::{OpenAiCompatibleConfig, OpenAiScheduler};
+use scheduler::{ModelRequestOptions, OpenAiCompatibleConfig, OpenAiScheduler};
 use session_kernel::{SessionConfig, ThreadManager};
 use tools::{LocalToolExecutor, ToolPolicy, tool_definitions_for_policy};
 use ui_bridge::{CliEvent, event_to_cli, user_text_op};
@@ -57,6 +57,14 @@ struct Cli {
     #[arg(long, default_value = "4096")]
     max_tokens: u32,
 
+    /// Thinking mode for compatible providers: auto, disabled, enabled, or provider_default
+    #[arg(long, default_value = "auto")]
+    thinking_mode: String,
+
+    /// Optional reasoning effort for compatible providers: low, medium, or high
+    #[arg(long)]
+    reasoning_effort: Option<String>,
+
     /// Allow model-requested file writes in CLI/web harnesses
     #[arg(long)]
     allow_workspace_write: bool,
@@ -75,10 +83,14 @@ async fn main() -> Result<()> {
     }
 
     if cli.vscode_stdio {
-        return vscode::serve_stdio(cli.model, cli.base_url, cli.max_tokens).await;
+        let request_options =
+            ModelRequestOptions::new(&cli.thinking_mode, cli.reasoning_effort.as_deref())?;
+        return vscode::serve_stdio(cli.model, cli.base_url, cli.max_tokens, request_options).await;
     }
 
-    let model_config = load_model_config(cli.base_url.as_deref())?;
+    let request_options =
+        ModelRequestOptions::new(&cli.thinking_mode, cli.reasoning_effort.as_deref())?;
+    let model_config = load_model_config(cli.base_url.as_deref(), request_options)?;
 
     let scheduler = Arc::new(OpenAiScheduler::openai_compatible(model_config)?);
     let tool_policy = cli_tool_policy(&cli)?;
@@ -149,14 +161,41 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-pub(crate) fn load_model_config(base_url_override: Option<&str>) -> Result<OpenAiCompatibleConfig> {
+pub(crate) fn load_model_config(
+    base_url_override: Option<&str>,
+    request_options: ModelRequestOptions,
+) -> Result<OpenAiCompatibleConfig> {
     let api_key = std::env::var("MARVIS_API_KEY")
         .context("MARVIS_API_KEY environment variable not set. Set it to the key for your OpenAI-compatible provider.")?;
     let base_url = base_url_override
         .map(str::to_string)
         .or_else(|| std::env::var("MARVIS_BASE_URL").ok())
         .unwrap_or_else(|| DEFAULT_BASE_URL.to_string());
-    Ok(OpenAiCompatibleConfig::new(api_key, base_url))
+    model_config_from_values(
+        api_key,
+        base_url,
+        "MARVIS_API_KEY",
+        "MARVIS_BASE_URL",
+        request_options,
+    )
+}
+
+pub(crate) fn model_config_from_values(
+    api_key: impl Into<String>,
+    base_url: impl Into<String>,
+    api_key_label: &str,
+    base_url_label: &str,
+    request_options: ModelRequestOptions,
+) -> Result<OpenAiCompatibleConfig> {
+    let api_key = api_key.into();
+    let base_url = base_url.into();
+    if api_key.trim().is_empty() {
+        anyhow::bail!("{api_key_label} must not be empty");
+    }
+    if base_url.trim().is_empty() {
+        anyhow::bail!("{base_url_label} must not be empty");
+    }
+    Ok(OpenAiCompatibleConfig::new(api_key, base_url).with_request_options(request_options))
 }
 
 fn cli_tool_policy(cli: &Cli) -> Result<ToolPolicy> {

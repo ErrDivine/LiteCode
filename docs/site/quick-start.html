@@ -1,0 +1,295 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Quick Start - lite-code / Marvis Runtime Design</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="highlight.css">
+        <link rel="stylesheet" href="tomorrow-night.css">
+        <link rel="stylesheet" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+        <link rel="stylesheet" href="theme/custom.css">
+
+
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="toc.js"></script>
+    </head>
+    <body>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">lite-code / Marvis Runtime Design</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="quick-start"><a class="header" href="#quick-start">Quick Start</a></h1>
+<p>This guide gets Marvis running in VSCode against an OpenAI-compatible model provider.</p>
+<h2 id="prerequisites"><a class="header" href="#prerequisites">Prerequisites</a></h2>
+<ul>
+<li>Rust toolchain with <code>cargo</code>.</li>
+<li>VSCode.</li>
+<li>Node.js for the extension development check.</li>
+<li>An API key for an OpenAI-compatible chat completions endpoint.</li>
+</ul>
+<p>Marvis uses one provider configuration for every VSCode agent. Configure it in VSCode Settings:</p>
+<pre><code class="language-json">{
+  "marvis.apiKey": "...",
+  "marvis.baseUrl": "https://api.openai.com/v1",
+  "marvis.thinkingMode": "auto"
+}
+</code></pre>
+<p><code>marvis.baseUrl</code> is optional when using the OpenAI default. For other compatible providers, set it to the provider's <code>/v1</code> base URL.</p>
+<p>Put <code>marvis.apiKey</code> in User or Machine Settings. Do not commit it in a project's <code>.vscode/settings.json</code>.</p>
+<h2 id="build-the-runtime"><a class="header" href="#build-the-runtime">Build The Runtime</a></h2>
+<p>From the repository root:</p>
+<pre><code class="language-bash">cargo build
+</code></pre>
+<p>The VSCode extension can use <code>target/debug/lite-code</code> while developing this repository. Published extension packages should include a runtime binary under <code>apps/vscode-extension/bin/</code> or configure <code>marvis.runtimePath</code>.</p>
+<h2 id="launch-the-vscode-extension"><a class="header" href="#launch-the-vscode-extension">Launch The VSCode Extension</a></h2>
+<ol>
+<li>Open <code>apps/vscode-extension</code> in VSCode.</li>
+<li>Press <code>F5</code> to start an Extension Development Host.</li>
+<li>In the development host, open the workspace you want Marvis to inspect.</li>
+<li>Run <code>Marvis: Start Marvis</code> from the command palette.</li>
+</ol>
+<p>The extension starts:</p>
+<pre><code class="language-bash">lite-code --vscode-stdio
+</code></pre>
+<p>It sends editor state, cursor context, diagnostics, task status, debug status, and recorded command results to the Rust runtime.</p>
+<h2 id="basic-use"><a class="header" href="#basic-use">Basic Use</a></h2>
+<p>Use these commands first:</p>
+<div class="table-wrapper"><table><thead><tr><th>Command</th><th>Use</th></tr></thead><tbody>
+<tr><td><code>Marvis: Start Marvis</code></td><td>Start the runtime and show the status panel.</td></tr>
+<tr><td><code>Marvis: Ask Marvis</code></td><td>Ask a free-form question about the current workspace.</td></tr>
+<tr><td><code>Marvis: Ask About Selection</code></td><td>Ask using the selected code as context.</td></tr>
+<tr><td><code>Marvis: Fix Near Cursor</code></td><td>Ask Marvis to inspect and fix the nearby code.</td></tr>
+<tr><td><code>Marvis: Explain Diagnostic</code></td><td>Explain the selected VSCode problem.</td></tr>
+<tr><td><code>Marvis: Check Autonomy Now</code></td><td>Trigger an immediate autonomous status check.</td></tr>
+</tbody></table>
+</div>
+<p>Marvis does not run autonomous edits or shell commands from a status tick. Autonomy is suggest-first: the runtime segments the current codebase and IDE state, routes a task through PAVE, and shows a suggestion. Work only starts after you accept the suggestion.</p>
+<h2 id="run-the-demo"><a class="header" href="#run-the-demo">Run The Demo</a></h2>
+<p>To record the autonomous scheduler behavior, use the showcase workspace:</p>
+<pre><code class="language-bash">./demos/autonomy-showcase/launch.sh
+</code></pre>
+<p>It opens VSCode with Marvis and a demo driver extension, introduces timed traps in a disposable workspace, and waits for the normal heartbeat/debounce path to suggest work. See <a href="apps/autonomy-showcase.html">Autonomy Showcase Demo</a> for the recording flow.</p>
+<h2 id="recommended-settings"><a class="header" href="#recommended-settings">Recommended Settings</a></h2>
+<p>Set these in VSCode when the defaults do not match your environment:</p>
+<pre><code class="language-json">{
+  "marvis.runtimePath": "/absolute/path/to/lite-code",
+  "marvis.apiKey": "...",
+  "marvis.model": "gpt-4.1-mini",
+  "marvis.baseUrl": "https://api.openai.com/v1",
+  "marvis.thinkingMode": "auto",
+  "marvis.reasoningEffort": "",
+  "marvis.maxTokens": 4096,
+  "marvis.autonomy.enabled": true,
+  "marvis.autonomy.idleDelayMs": 3000,
+  "marvis.autonomy.heartbeatIntervalMs": 30000
+}
+</code></pre>
+<p>Agents are generated automatically from bundled skills, workspace skills, and built-in toolsets. They all use the shared model/provider settings above; to add a project-specific agent identity, add a <code>SKILL.md</code> package under <code>.marvis/skills</code> or <code>.agents/skills</code>.</p>
+<p>For DeepSeek-compatible endpoints, <code>auto</code> sends <code>{"thinking":{"type":"disabled"}}</code> by default. Set <code>marvis.thinkingMode</code> to <code>enabled</code> and optionally set <code>marvis.reasoningEffort</code> to <code>low</code>, <code>medium</code>, or <code>high</code> only when you want provider thinking output.</p>
+<h2 id="skills-and-mcp"><a class="header" href="#skills-and-mcp">Skills And MCP</a></h2>
+<p>Bundled Marvis, Anthropic, and local Codex skills are available automatically. Workspace skills can be added under:</p>
+<pre><code class="language-text">.marvis/skills/**/SKILL.md
+.agents/skills/**/SKILL.md
+</code></pre>
+<p>MCP servers are configured from:</p>
+<pre><code class="language-text">.marvis/mcp.json
+.mcp.json
+</code></pre>
+<p>Skills package reusable instructions, references, and scripts. MCP servers expose external tools. Both are gated by the selected agent profile and the runtime tool policy.</p>
+<h2 id="verify-the-workspace"><a class="header" href="#verify-the-workspace">Verify The Workspace</a></h2>
+<p>Run the main checks before publishing changes:</p>
+<pre><code class="language-bash">cargo fmt --all -- --check
+cargo check --workspace --locked
+cargo test --workspace --locked
+cargo clippy --workspace --locked -- -D warnings
+npm --prefix apps/vscode-extension run check
+target/mdbook-bin/bin/mdbook build docs
+</code></pre>
+<p>If <code>marvis.apiKey</code> is missing, real VSCode model turns fail with a configuration error. The production runtime does not use a fake model fallback.</p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="index.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="design/overview.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="index.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="design/overview.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr.min.js"></script>
+        <script src="mark.min.js"></script>
+        <script src="searcher.js"></script>
+
+        <script src="clipboard.min.js"></script>
+        <script src="highlight.js"></script>
+        <script src="book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+    </div>
+    </body>
+</html>

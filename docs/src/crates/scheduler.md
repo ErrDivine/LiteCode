@@ -8,6 +8,7 @@
 | --- | --- |
 | `OpenAiScheduler` | Real model scheduler backed by `openai-rs::Client`. |
 | `OpenAiCompatibleConfig` | API key and base URL for an OpenAI-compatible provider. |
+| `ModelRequestOptions` | Thinking mode and optional reasoning effort applied to chat-completion requests. |
 | `SyntheticScheduler` | Deterministic scheduler used by tests/dev code, not by the VSCode product fallback path. |
 
 ## OpenAiScheduler
@@ -21,8 +22,11 @@ Constructors:
 
 - `config.api_key`
 - `config.base_url`
+- `config.request_options`
 
 and maps client construction errors into `KernelError::InvalidRequest`.
+
+`ModelRequestOptions` defaults to `auto`: DeepSeek-compatible base URLs receive `{"thinking":{"type":"disabled"}}`, while other providers omit the `thinking` parameter. Explicit `enabled`, `disabled`, and `provider_default` modes are also supported.
 
 ## Turn Execution
 
@@ -34,7 +38,7 @@ and maps client construction errors into `KernelError::InvalidRequest`.
 4. Convert dynamic tool specs into OpenAI function tool definitions.
 5. Send a streaming `chat/completions` request.
 6. Emit `AgentMessageDelta` events as content deltas arrive.
-7. Accumulate streamed tool-call deltas by index.
+7. Accumulate streamed reasoning-content and tool-call deltas by index.
 8. If there are no tool calls, return final assistant message as `SchedulerOutput`.
 9. If there are tool calls, emit tool begin/end events, execute each tool, append tool results to the chat messages, and continue the loop.
 
@@ -59,6 +63,8 @@ Only builders with a non-empty function name become `ToolCall` values. Function 
 - `ResponseItem::FunctionCallOutput` to a tool result message.
 
 The scheduler returns function-call and function-call-output response items alongside the final assistant message, so future turns can replay tool history without malformed tool-result-only chat history.
+
+When a thinking-enabled provider streams `reasoning_content`, the scheduler stores it on assistant messages. For tool-call assistant messages, the content is stored on the first `FunctionCall` response item and restored when replaying history.
 
 ## SyntheticScheduler
 

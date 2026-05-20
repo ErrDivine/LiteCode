@@ -36,12 +36,16 @@ Settings:
 | --- | --- | --- |
 | `marvis.runtimePath` | empty | Optional path to the `lite-code` binary. |
 | `marvis.model` | `gpt-4.1-mini` | Model passed to the Rust runtime. |
+| `marvis.apiKey` | empty | API key for the OpenAI-compatible provider used by the VSCode runtime. |
 | `marvis.baseUrl` | empty | Optional OpenAI-compatible base URL. Empty means use `MARVIS_BASE_URL` or `https://api.openai.com/v1`. |
+| `marvis.thinkingMode` | `auto` | Thinking mode for compatible providers. `auto` disables DeepSeek thinking and omits the parameter elsewhere. |
+| `marvis.reasoningEffort` | empty | Optional `low`, `medium`, or `high` reasoning effort for compatible providers. |
 | `marvis.maxTokens` | `4096` | Maximum response tokens per model turn. |
 | `marvis.autonomy.enabled` | `true` | Enables suggest-first autonomous status checks. |
 | `marvis.autonomy.idleDelayMs` | `3000` | Debounce delay before a quiet status check. |
 | `marvis.autonomy.heartbeatIntervalMs` | `30000` | Low-frequency heartbeat interval while the runtime is active. |
-| `marvis.agentProfiles` | built-in Rust/test/explainer profiles | Agent model names, skill ids, MCP server ids, tool allowlists, approval defaults, and PAVE vectors. |
+
+Agent identities are not configured in VSCode settings. The runtime reloads bundled Marvis/imported skills, workspace `SKILL.md` packages, and local tool functions, then synthesizes same-model agents from those skills, their declared tool dependencies, declared MCP dependencies, and built-in read-only/verification/patch toolsets.
 
 ## Activation
 
@@ -154,7 +158,7 @@ Helpers:
 
 `collectStatus` sends active editor, open editors, visible ranges, selections, cursor bubble, recent files, diagnostics, terminal-like command results, running tasks, debug sessions, trust state, remote name, and VSCode app/profile name. When VSCode exposes shell-integration events, Marvis also records completed terminal shell executions and their output tail.
 
-Autonomy ticks are sent after diagnostics, saves, command/task results, debug termination, quiet editor changes, and the heartbeat. The extension does not start tool execution from a tick; it displays the returned suggestion and sends `run_suggested_task` only after acceptance.
+Autonomy ticks are sent after diagnostics, saves, command/task results, debug termination, quiet editor changes, and the heartbeat. The runtime stays idle for unchanged, busy, ambiguous, or merely dirty/risky snapshots. When status points to a focused, useful next step, the LLM is prompted to proactively infer the user's intent, select an auto-detected skill/toolset agent, and return a suggest-first task. The extension asks for user acceptance before sending `run_suggested_task`.
 
 ## Webview Panel
 

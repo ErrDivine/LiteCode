@@ -1,0 +1,26 @@
+capabilities:
+  - read_file
+  - read_many_files
+  - search_files
+  - find_files
+  - list_directory
+  - list_symbols
+  - write_file
+  - edit_file
+  - apply_patch
+  - run_test
+  - run_build
+  - run_formatter
+  - list_rollbacks
+  - restore_rollback
+  - git_diff
+  - git_status
+  - list_skills
+  - list_skill_resources
+  - read_skill_resource
+interface:
+  display_name: "Transplant Code"
+  short_description: "Move code across projects with minimal breakage"
+  default_prompt: "Use $transplant-code to move code from one project into another while preserving behavior and minimizing API changes."
+policy:
+  allow_implicit_invocation: true

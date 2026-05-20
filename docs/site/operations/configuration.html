@@ -156,8 +156,8 @@
                         <h1 id="configuration-and-data-locations"><a class="header" href="#configuration-and-data-locations">Configuration And Data Locations</a></h1>
 <h2 id="environment-variables"><a class="header" href="#environment-variables">Environment Variables</a></h2>
 <div class="table-wrapper"><table><thead><tr><th>Variable</th><th>Used by</th><th>Meaning</th></tr></thead><tbody>
-<tr><td><code>MARVIS_API_KEY</code></td><td>CLI, web, VSCode runtime</td><td>API key for any OpenAI-compatible chat completions provider. Required for real model turns.</td></tr>
-<tr><td><code>MARVIS_BASE_URL</code></td><td>CLI, web, VSCode runtime</td><td>Optional OpenAI-compatible base URL. Defaults to <code>https://api.openai.com/v1</code>.</td></tr>
+<tr><td><code>MARVIS_API_KEY</code></td><td>CLI, web</td><td>API key for any OpenAI-compatible chat completions provider. Required for real CLI/web model turns.</td></tr>
+<tr><td><code>MARVIS_BASE_URL</code></td><td>CLI, web, VSCode runtime fallback</td><td>Optional OpenAI-compatible base URL. Defaults to <code>https://api.openai.com/v1</code>.</td></tr>
 <tr><td><code>LITE_CODE_STATE_HOME</code></td><td><code>state-store</code> constant</td><td>Intended state root override. The current implementation exposes the constant but does not wire global discovery through it.</td></tr>
 </tbody></table>
 </div>
@@ -177,23 +177,26 @@
 <div class="table-wrapper"><table><thead><tr><th>Setting</th><th>Meaning</th></tr></thead><tbody>
 <tr><td><code>marvis.runtimePath</code></td><td>Absolute or workspace-relative binary path to run instead of auto-detected runtime.</td></tr>
 <tr><td><code>marvis.model</code></td><td>Model passed to <code>Initialize</code>.</td></tr>
+<tr><td><code>marvis.apiKey</code></td><td>API key passed to <code>Initialize</code> for the OpenAI-compatible provider.</td></tr>
 <tr><td><code>marvis.baseUrl</code></td><td>Optional OpenAI-compatible base URL passed to <code>Initialize</code>.</td></tr>
+<tr><td><code>marvis.thinkingMode</code></td><td><code>auto</code>, <code>disabled</code>, <code>enabled</code>, or <code>provider_default</code>; <code>auto</code> disables DeepSeek thinking and omits the parameter elsewhere.</td></tr>
+<tr><td><code>marvis.reasoningEffort</code></td><td>Optional <code>low</code>, <code>medium</code>, or <code>high</code> reasoning effort for compatible providers.</td></tr>
 <tr><td><code>marvis.maxTokens</code></td><td>Max tokens passed to <code>Initialize</code>.</td></tr>
 <tr><td><code>marvis.autonomy.enabled</code></td><td>Enables VSCode status wake-up checks and suggest-first autonomous routing.</td></tr>
 <tr><td><code>marvis.autonomy.idleDelayMs</code></td><td>Debounce delay before sending an autonomy tick after status changes.</td></tr>
 <tr><td><code>marvis.autonomy.heartbeatIntervalMs</code></td><td>Heartbeat interval for low-frequency status checks while the runtime is active.</td></tr>
-<tr><td><code>marvis.agentProfiles</code></td><td>Agent model names, skill ids, MCP server ids, tool allowlists, approval defaults, and PAVE vectors.</td></tr>
 </tbody></table>
 </div>
-<p>Agent profiles never contain API keys or base URLs. They select model names against the same OpenAI-compatible provider configured by <code>MARVIS_API_KEY</code> and <code>MARVIS_BASE_URL</code>.</p>
+<p>VSCode no longer accepts manually configured agent profiles. Store <code>marvis.apiKey</code> in User or Machine Settings rather than committed workspace settings; agent identities are synthesized inside the runtime from discovered skills, declared tool dependencies, MCP dependencies, and built-in toolsets. Every generated agent uses the shared <code>marvis.model</code>, <code>marvis.apiKey</code>, and <code>marvis.baseUrl</code> provider settings.</p>
 <h2 id="workspace-skill-and-mcp-config"><a class="header" href="#workspace-skill-and-mcp-config">Workspace Skill And MCP Config</a></h2>
 <p>Workspace skills are loaded from:</p>
 <pre><code class="language-text">.marvis/skills/**/SKILL.md
 .agents/skills/**/SKILL.md
 </code></pre>
-<p>Bundled system skills are materialized under:</p>
+<p>Bundled system skills are built from <code>skills/system/**/SKILL.md</code>, including imported Anthropic and local Codex skill packages, then materialized under:</p>
 <pre><code class="language-text">.lite-code/skills/.system/**/SKILL.md
 </code></pre>
+<p>To add a project-specific skill, use a workspace skill path. To ship a new built-in skill with Marvis itself, add a package under <code>skills/system</code>; the build script embeds its resources automatically.</p>
 <p>Stdio MCP servers are loaded from:</p>
 <pre><code class="language-text">.marvis/mcp.json
 .mcp.json
@@ -222,10 +225,12 @@
 <h2 id="network-behavior"><a class="header" href="#network-behavior">Network Behavior</a></h2>
 <p>All product/runtime modes use <code>OpenAiScheduler</code> with an OpenAI-compatible provider config:</p>
 <ul>
-<li><code>MARVIS_API_KEY</code> supplies the bearer token.</li>
-<li><code>MARVIS_BASE_URL</code> supplies the provider URL, or defaults to <code>https://api.openai.com/v1</code>.</li>
+<li><code>marvis.apiKey</code> supplies the bearer token in VSCode.</li>
+<li><code>MARVIS_API_KEY</code> supplies the bearer token in CLI/web modes.</li>
+<li><code>MARVIS_BASE_URL</code> supplies the provider URL in CLI/web modes and as a VSCode fallback, or defaults to <code>https://api.openai.com/v1</code>.</li>
+<li><code>marvis.thinkingMode=auto</code> sends disabled thinking for DeepSeek-compatible endpoints so tool-call loops do not require reasoning content by default.</li>
 </ul>
-<p>If <code>MARVIS_API_KEY</code> is missing, the runtime returns a clear configuration error. It does not use a production fake-model fallback.</p>
+<p>If the relevant API key is missing, the runtime returns a clear configuration error. It does not use a production fake-model fallback.</p>
 <h2 id="ports"><a class="header" href="#ports">Ports</a></h2>
 <p>The web harness binds:</p>
 <pre><code class="language-text">127.0.0.1:3000
@@ -236,7 +241,7 @@
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                            <a rel="prev" href="../apps/vscode-extension.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                            <a rel="prev" href="../apps/autonomy-showcase.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <i class="fa fa-angle-left"></i>
                             </a>
 
@@ -250,7 +255,7 @@
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                    <a rel="prev" href="../apps/vscode-extension.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                    <a rel="prev" href="../apps/autonomy-showcase.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <i class="fa fa-angle-left"></i>
                     </a>
 

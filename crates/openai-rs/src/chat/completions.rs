@@ -16,6 +16,7 @@ use tokio::sync::mpsc;
 pub enum ChatStreamEvent {
     Delta {
         content: Option<String>,
+        reasoning_content: Option<String>,
         tool_calls: Option<Vec<ToolCallDelta>>,
         finish_reason: Option<String>,
     },
@@ -132,6 +133,7 @@ impl Completions<'_> {
 
                         let event = ChatStreamEvent::Delta {
                             content: choice.delta.content,
+                            reasoning_content: choice.delta.reasoning_content,
                             tool_calls: choice.delta.tool_calls,
                             finish_reason: choice.finish_reason,
                         };

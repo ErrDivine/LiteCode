@@ -4,14 +4,11 @@ use anyhow::{Context, Result, anyhow};
 use async_trait::async_trait;
 use openai_rs::{ChatCompletionRequest, Client, Message};
 use pave_router::{
-    AgentProfile, Router, RouterConfig, TaskCandidate, ToolAccess, default_agent_profiles,
-    normalize_profiles,
+    AgentProfile, Router, RouterConfig, TaskCandidate, ToolAccess, normalize_profiles,
 };
 use scheduler::OpenAiCompatibleConfig;
 use serde::Deserialize;
-use status::{
-    CodebaseStatus, CommandResult, DiagnosticSeverity, SegmentKind, StatusReport, now_timestamp_ms,
-};
+use status::{CodebaseStatus, CommandResult, DiagnosticSeverity, StatusReport, now_timestamp_ms};
 use ui_bridge::{AutonomyDecision, AutonomySuggestion, AutonomyTrigger, PromptApproval};
 
 const SUGGESTION_COOLDOWN_MS: u64 = 120_000;
@@ -22,6 +19,7 @@ pub struct SegmenterInput {
     pub trigger: AutonomyTrigger,
     pub report: StatusReport,
     pub status: CodebaseStatus,
+    pub agent_profiles: Vec<AgentProfile>,
 }
 
 #[async_trait]
@@ -58,14 +56,31 @@ impl ProblemSegmenter for OpenAiProblemSegmenter {
     async fn segment(&self, input: SegmenterInput) -> Result<Vec<TaskCandidate>> {
         let client = self.client()?;
         let prompt = segmentation_prompt(&input)?;
-        let first = request_json(&client, &self.model, self.max_tokens, prompt).await?;
+        let first = request_json(
+            &client,
+            &self.model,
+            self.max_tokens,
+            self.config
+                .request_options
+                .for_chat_request(&self.config.base_url),
+            prompt,
+        )
+        .await?;
         match parse_segmenter_output(&first) {
             Ok(tasks) => Ok(tasks),
             Err(first_err) => {
                 let repair_prompt = repair_prompt(&first, &first_err.to_string());
-                let repaired = request_json(&client, &self.model, self.max_tokens, repair_prompt)
-                    .await
-                    .context("repair segmenter output")?;
+                let repaired = request_json(
+                    &client,
+                    &self.model,
+                    self.max_tokens,
+                    self.config
+                        .request_options
+                        .for_chat_request(&self.config.base_url),
+                    repair_prompt,
+                )
+                .await
+                .context("repair segmenter output")?;
                 parse_segmenter_output(&repaired)
             }
         }
@@ -94,19 +109,6 @@ impl AutonomyCoordinator {
         self.in_flight = in_flight;
     }
 
-    pub fn profiles_or_default(
-        &self,
-        profiles: Vec<AgentProfile>,
-        default_model: &str,
-    ) -> Vec<AgentProfile> {
-        let profiles = normalize_profiles(profiles);
-        if profiles.is_empty() {
-            default_agent_profiles(default_model)
-        } else {
-            profiles
-        }
-    }
-
     pub async fn handle_tick<S>(
         &mut self,
         trigger: AutonomyTrigger,
@@ -114,7 +116,7 @@ impl AutonomyCoordinator {
         status: CodebaseStatus,
         profiles: Vec<AgentProfile>,
         segmenter: &S,
-        default_model: &str,
+        _default_model: &str,
     ) -> AutonomyDecision
     where
         S: ProblemSegmenter,
@@ -138,7 +140,7 @@ impl AutonomyCoordinator {
             return idle(snapshot_hash, "no actionable status signal");
         }
 
-        let profiles = self.profiles_or_default(profiles, default_model);
+        let profiles = normalize_profiles(profiles);
         let router = match Router::new(profiles, RouterConfig::default()) {
             Ok(router) => router,
             Err(err) => return idle(snapshot_hash, err.to_string()),
@@ -148,6 +150,7 @@ impl AutonomyCoordinator {
             trigger,
             report: report.clone(),
             status,
+            agent_profiles: router.profiles().to_vec(),
         };
         let tasks = match segmenter.segment(input).await {
             Ok(tasks) => tasks.into_iter().take(MAX_CANDIDATES).collect(),
@@ -159,7 +162,7 @@ impl AutonomyCoordinator {
 
         let Some(route) = router.select(tasks) else {
             self.last_evaluated_snapshot = Some(evaluation_key);
-            return idle(snapshot_hash, "no routed task passed thresholds");
+            return idle(snapshot_hash, "no compatible routed task");
         };
 
         self.last_evaluated_snapshot = Some(evaluation_key);
@@ -278,50 +281,115 @@ fn has_actionable_status(
     if matches!(trigger, AutonomyTrigger::Manual) {
         return true;
     }
-    if report.stuckness.is_some() || report.suggestion.is_some() {
-        return true;
+
+    if workspace_is_busy(status) {
+        return false;
     }
-    if status
-        .vscode
-        .problems
-        .iter()
-        .any(|diagnostic| matches!(diagnostic.severity, DiagnosticSeverity::Error))
+
+    let active_editor = status.vscode.active_editor.as_ref();
+    let has_cursor_or_selection =
+        status.vscode.cursor_context.is_some() || !status.vscode.selections.is_empty();
+    let has_active_focus = active_editor.is_some() && has_cursor_or_selection;
+
+    if report.stuckness.is_some()
+        && (has_active_focus || recent_command_failure(status) || active_error_count(status) > 0)
     {
         return true;
     }
-    if status
+
+    if active_editor.is_some_and(|editor| active_error_count_for_path(status, &editor.path) > 0)
+        && matches!(
+            trigger,
+            AutonomyTrigger::DiagnosticsChanged
+                | AutonomyTrigger::FileSaved
+                | AutonomyTrigger::StatusChange
+                | AutonomyTrigger::Idle
+        )
+    {
+        return true;
+    }
+
+    if recent_command_failure(status)
+        && matches!(
+            trigger,
+            AutonomyTrigger::CommandResult
+                | AutonomyTrigger::TaskEnded
+                | AutonomyTrigger::DebugTerminated
+                | AutonomyTrigger::Idle
+                | AutonomyTrigger::Heartbeat
+        )
+    {
+        return true;
+    }
+
+    false
+}
+
+fn workspace_is_busy(status: &CodebaseStatus) -> bool {
+    status
+        .vscode
+        .running_tasks
+        .iter()
+        .any(|task| task.is_running)
+        || status.vscode.debug_sessions.iter().any(|session| {
+            session
+                .state
+                .as_deref()
+                .is_some_and(|state| matches!(state, "running" | "starting" | "active"))
+        })
+}
+
+fn recent_command_failure(status: &CodebaseStatus) -> bool {
+    status
         .commands
         .recent_results
         .iter()
         .rev()
-        .take(3)
+        .take(2)
         .any(CommandResult::failed)
-    {
-        return true;
-    }
-    report.active_segments.iter().any(|segment| {
-        matches!(
-            segment.kind,
-            SegmentKind::CommandFailure
-                | SegmentKind::FailingTest
-                | SegmentKind::DiagnosticCluster
-                | SegmentKind::Risk
-        )
-    })
+}
+
+fn active_error_count(status: &CodebaseStatus) -> usize {
+    status
+        .vscode
+        .problems
+        .iter()
+        .filter(|diagnostic| matches!(diagnostic.severity, DiagnosticSeverity::Error))
+        .count()
+}
+
+fn active_error_count_for_path(status: &CodebaseStatus, path: &std::path::Path) -> usize {
+    status
+        .vscode
+        .problems
+        .iter()
+        .filter(|diagnostic| {
+            matches!(diagnostic.severity, DiagnosticSeverity::Error)
+                && diagnostic.path.as_path() == path
+        })
+        .count()
 }
 
 fn segmentation_prompt(input: &SegmenterInput) -> Result<String> {
     let report_json = serde_json::to_string(&input.report)?;
     let status_json = serde_json::to_string(&compact_status(&input.status))?;
+    let agents_json = serde_json::to_string(&agent_profiles_for_prompt(&input.agent_profiles))?;
     Ok(format!(
-        "You are Marvis autonomous problem segmenter. Output JSON only, no markdown.\n\
-         Return {{\"tasks\":[]}} when there is no useful action.\n\
+        "You are Marvis autonomous problem, user-intent, and agent selector. Output JSON only, no markdown.\n\
+         Be proactive: create a suggestion whenever VSCode/codebase status gives a plausible, useful next step that an agent can help with after user approval.\n\
+         Do not wait for a broken build or perfect certainty. Active editor, cursor context, recent saves, focused diagnostics, recent command failures, selections, changed files, and status segments are all evidence of user intent.\n\
+         Infer the user's likely workflow boldly but stay grounded in concrete evidence. Useful suggestions include fixing a focused diagnostic, explaining a failed command, verifying recent edits, adding code at the cursor-indicated location, updating references/imports after a move, adding or adjusting a nearby test, or making a small reversible patch implied by the current context.\n\
+         Prefer one narrow, immediately actionable task over silence when the evidence points to a helpful next move. The user will be asked for permission before execution, so low/medium-risk suggestions may be offered when they are specific and reversible.\n\
+         Return {{\"tasks\":[]}} only when no concrete helpful next step can be inferred, when only broad git dirtiness/risk is visible, when tools/tasks/debug sessions are still running, or when assistance would be speculative.\n\
          Produce at most {MAX_CANDIDATES} tasks. Each task must have:\n\
-         id, title, prompt, evidence, files, risk_level, needs_write, desired_tools, pave, confidence.\n\
+         id, title, prompt, agent_id, evidence, files, risk_level, needs_write, desired_tools, pave.\n\
+         agent_id must be one id from Available agents. Select the agent before asking the user for permission.\n\
          risk_level must be one of low, medium, high, critical.\n\
          pave is a JSON object with numeric dimensions from: rust, javascript, tests, diagnostics, refactor, explanation, patch, shell, git, docs, frontend, infra, risk_low, risk_medium, risk_high.\n\
-         Use confidence 0.0 to 1.0. Prefer no task over noisy suggestions.\n\n\
+         A valid task needs concrete evidence from the status and a specific next action. Task title and prompt must state the inferred user intention and why this agent should handle it now.\n\
+         Avoid noisy broad suggestions, but bias toward action when the next step is focused and useful.\n\n\
          Trigger: {:?}\n\
+         Available agents JSON: {agents_json}\n\
          Status report JSON: {report_json}\n\
          Codebase status JSON: {status_json}",
         input.trigger
@@ -340,6 +408,7 @@ async fn request_json(
     client: &Client,
     model: &str,
     max_tokens: u32,
+    request_options: scheduler::ChatRequestOptions,
     prompt: String,
 ) -> Result<String> {
     let response = client
@@ -353,6 +422,8 @@ async fn request_json(
                 Message::user(prompt),
             ],
             tools: Vec::new(),
+            thinking: request_options.thinking,
+            reasoning_effort: request_options.reasoning_effort,
             stream: false,
         })
         .await
@@ -389,6 +460,32 @@ fn extract_json_object(text: &str) -> Option<&str> {
     let start = text.find('{')?;
     let end = text.rfind('}')?;
     (end >= start).then_some(&text[start..=end])
+}
+
+#[derive(Debug, serde::Serialize)]
+struct AgentProfileForPrompt<'a> {
+    id: &'a str,
+    label: &'a str,
+    skills: &'a [String],
+    mcp_servers: &'a [String],
+    tool_allowlist: &'a [String],
+    approval: ToolAccess,
+    instruction: &'a str,
+}
+
+fn agent_profiles_for_prompt(profiles: &[AgentProfile]) -> Vec<AgentProfileForPrompt<'_>> {
+    profiles
+        .iter()
+        .map(|profile| AgentProfileForPrompt {
+            id: &profile.id,
+            label: &profile.label,
+            skills: &profile.skills,
+            mcp_servers: &profile.mcp_servers,
+            tool_allowlist: &profile.tool_allowlist,
+            approval: profile.default_approval,
+            instruction: &profile.skill_prompt,
+        })
+        .collect()
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -435,7 +532,7 @@ mod tests {
     use std::path::PathBuf;
 
     use super::*;
-    use pave_router::PaveVector;
+    use pave_router::{AgentProfile, PaveVector, ToolAccess};
     use status::{CodebaseStatus, DiagnosticEvent, Position, TextRange};
 
     #[derive(Clone)]
@@ -455,6 +552,24 @@ mod tests {
         }
     }
 
+    fn test_agent_profiles() -> Vec<AgentProfile> {
+        vec![AgentProfile {
+            id: "rust-diagnostic-repair".to_string(),
+            label: "Rust Diagnostic Repair".to_string(),
+            model: "gpt-test".to_string(),
+            skills: vec!["rust-diagnostic-repair".to_string()],
+            mcp_servers: Vec::new(),
+            skill_prompt: "Repair Rust diagnostics.".to_string(),
+            tool_allowlist: vec![
+                "read_file".to_string(),
+                "apply_patch".to_string(),
+                "run_test".to_string(),
+            ],
+            pave: PaveVector::new([("rust", 1.0), ("diagnostics", 1.0), ("patch", 1.0)]),
+            default_approval: ToolAccess::patch_and_checks(),
+        }]
+    }
+
     #[tokio::test]
     async fn clean_status_returns_idle_without_segmenting() {
         let status = CodebaseStatus::new("/tmp/demo");
@@ -471,7 +586,7 @@ mod tests {
                 AutonomyTrigger::Heartbeat,
                 report,
                 status,
-                Vec::new(),
+                test_agent_profiles(),
                 &MockSegmenter {
                     tasks: Vec::new(),
                     fail: true,
@@ -485,6 +600,20 @@ mod tests {
     #[tokio::test]
     async fn routes_diagnostic_task_to_default_agent() {
         let mut status = CodebaseStatus::new("/tmp/demo");
+        status.vscode.active_editor = Some(status::EditorRef {
+            path: PathBuf::from("src/lib.rs"),
+            language_id: Some("rust".to_string()),
+            is_dirty: false,
+        });
+        status.vscode.cursor_context = Some(status::CursorContext {
+            path: PathBuf::from("src/lib.rs"),
+            line: 0,
+            character: 0,
+            symbol_hint: None,
+            text_before: String::new(),
+            text_after: String::new(),
+            surrounding_text: String::new(),
+        });
         status.vscode.problems.push(DiagnosticEvent {
             id: "d1".to_string(),
             path: PathBuf::from("src/lib.rs"),
@@ -516,13 +645,14 @@ mod tests {
                 AutonomyTrigger::DiagnosticsChanged,
                 report,
                 status,
-                Vec::new(),
+                test_agent_profiles(),
                 &MockSegmenter {
                     fail: false,
                     tasks: vec![TaskCandidate {
                         id: "fix-diagnostic".to_string(),
                         title: "Fix diagnostic".to_string(),
                         prompt: "Fix the Rust diagnostic.".to_string(),
+                        agent_id: Some("rust-diagnostic-repair".to_string()),
                         evidence: vec!["rustc diagnostic".to_string()],
                         files: vec![PathBuf::from("src/lib.rs")],
                         risk_level: status::RiskLevel::Medium,
@@ -533,7 +663,6 @@ mod tests {
                             ("diagnostics", 1.0),
                             ("patch", 1.0),
                         ]),
-                        confidence: 0.9,
                     }],
                 },
                 "gpt-test",
@@ -546,6 +675,36 @@ mod tests {
             }
             other => panic!("unexpected decision: {other:?}"),
         }
+    }
+
+    #[tokio::test]
+    async fn dirty_tree_without_clear_intent_stays_idle() {
+        let mut status = CodebaseStatus::new("/tmp/demo");
+        status.git.dirty_files = (0..20)
+            .map(|index| PathBuf::from(format!("file-{index}.rs")))
+            .collect();
+        let report = StatusReport {
+            snapshot_hash: "dirty".to_string(),
+            summary: "dirty tree".to_string(),
+            active_segments: Vec::new(),
+            stuckness: None,
+            suggestion: None,
+        };
+        let mut coordinator = AutonomyCoordinator::new();
+        let decision = coordinator
+            .handle_tick(
+                AutonomyTrigger::Heartbeat,
+                report,
+                status,
+                test_agent_profiles(),
+                &MockSegmenter {
+                    tasks: Vec::new(),
+                    fail: true,
+                },
+                "gpt-test",
+            )
+            .await;
+        assert!(matches!(decision, AutonomyDecision::Idle { .. }));
     }
 
     #[tokio::test]
@@ -571,13 +730,13 @@ mod tests {
             id: "fix".to_string(),
             title: "Fix".to_string(),
             prompt: "Fix.".to_string(),
+            agent_id: Some("rust-diagnostic-repair".to_string()),
             evidence: Vec::new(),
             files: Vec::new(),
             risk_level: status::RiskLevel::Medium,
             needs_write: true,
             desired_tools: vec!["apply_patch".to_string()],
             pave: PaveVector::new([("rust", 1.0), ("patch", 1.0)]),
-            confidence: 0.9,
         };
         let segmenter = MockSegmenter {
             tasks: vec![task],
@@ -589,7 +748,7 @@ mod tests {
                 AutonomyTrigger::Manual,
                 report.clone(),
                 status.clone(),
-                Vec::new(),
+                test_agent_profiles(),
                 &segmenter,
                 "gpt-test",
             )
@@ -604,12 +763,34 @@ mod tests {
                 AutonomyTrigger::Manual,
                 report,
                 status,
-                Vec::new(),
+                test_agent_profiles(),
                 &segmenter,
                 "gpt-test",
             )
             .await;
         assert!(matches!(second, AutonomyDecision::Suppressed { .. }));
+    }
+
+    #[test]
+    fn segmentation_prompt_biases_toward_specific_action() {
+        let prompt = segmentation_prompt(&SegmenterInput {
+            trigger: AutonomyTrigger::Idle,
+            report: StatusReport {
+                snapshot_hash: "prompt".to_string(),
+                summary: "prompt".to_string(),
+                active_segments: Vec::new(),
+                stuckness: None,
+                suggestion: None,
+            },
+            status: CodebaseStatus::new("/tmp/demo"),
+            agent_profiles: test_agent_profiles(),
+        })
+        .unwrap();
+
+        assert!(prompt.contains("Be proactive"));
+        assert!(prompt.contains("Do not wait for a broken build or perfect certainty"));
+        assert!(prompt.contains("bias toward action"));
+        assert!(!prompt.contains("Return {\"tasks\":[]} when intent is clearly inferred"));
     }
 
     #[test]

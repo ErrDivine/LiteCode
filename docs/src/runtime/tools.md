@@ -253,7 +253,7 @@ Behavior:
 Selected routed agents can inspect equipped Codex-style skill packages:
 
 - `list_skills`: lists equipped skills, package roots, tool dependencies, and resource counts.
-- `list_skill_resources`: lists scripts, references, and assets for one equipped skill.
+- `list_skill_resources`: lists declared package resources for one equipped skill, classified as scripts, references, or assets.
 - `read_skill_resource`: reads a declared text resource from an equipped skill package.
 - `run_skill_script`: runs a declared script directly, without shell string interpolation, and only appears with risky-shell approval.
 

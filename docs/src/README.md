@@ -15,6 +15,7 @@ At the top level the project is split into:
 | `apps/vscode-extension` | VSCode product shell. It collects editor context and speaks newline-delimited JSON to the Rust binary. |
 | `src/main.rs` | Binary entrypoint. It selects CLI, web, or VSCode stdio mode. |
 | `src/tools.rs` | Current local tool executor for shell, file read/write/edit, directory listing, search, glob discovery, safe test/build helpers, and runtime policy gates. |
+| `src/skills.rs` | Codex-style skill package loading, bundled skill materialization, and resource indexing. |
 | `src/skill_mcp.rs` | Skill registry, selected skill injection, stdio MCP discovery, and MCP tool execution. |
 | `src/web.rs` | Temporary HTTP/SSE web harness. |
 | `src/vscode.rs` | Runtime side of the VSCode stdio bridge. |
@@ -23,7 +24,7 @@ At the top level the project is split into:
 | `crates/scheduler` | Model turn execution against OpenAI-compatible chat completions plus a synthetic scheduler used only by tests/dev code. |
 | `crates/openai-rs` | Reusable OpenAI-compatible HTTP and streaming client. |
 | `crates/status` | VSCode/codebase status model, deterministic segments, stuckness detection, git state, and context capsules. |
-| `crates/pave-router` | Rust JSON PAVE vectors, agent profiles, task candidates, and route scoring. |
+| `crates/pave-router` | Rust JSON PAVE vectors, generated agent identities, task candidates, and route scoring. |
 | `crates/ui-bridge` | Adapters from kernel events into CLI, web SSE, and VSCode runtime event shapes. |
 | `crates/rollout` | JSONL session recording and listing. |
 | `crates/thread-store` | Storage-neutral thread persistence interface with local JSONL history and sidecar metadata. |
@@ -32,7 +33,7 @@ At the top level the project is split into:
 
 ## Reading Path
 
-Start with [Product And Runtime Overview](design/overview.md), then [Architecture](design/architecture.md), then [Runtime Flows](design/flows.md). After that, each crate page can be read independently.
+Start with [Quick Start](quick-start.md) if you want to run Marvis in VSCode. Use [Autonomy Showcase Demo](apps/autonomy-showcase.md) when you need a screen-recordable walkthrough of the autonomous scheduler. For implementation context, read [Product And Runtime Overview](design/overview.md), then [Architecture](design/architecture.md), then [Runtime Flows](design/flows.md). After that, each crate page can be read independently.
 
 For interface-level lookup, use:
 

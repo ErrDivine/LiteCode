@@ -1,0 +1,26 @@
+capabilities:
+  - read_file
+  - read_many_files
+  - search_files
+  - find_files
+  - list_directory
+  - list_symbols
+  - write_file
+  - edit_file
+  - apply_patch
+  - run_test
+  - run_build
+  - run_formatter
+  - list_rollbacks
+  - restore_rollback
+  - git_diff
+  - git_status
+  - list_skills
+  - list_skill_resources
+  - read_skill_resource
+interface:
+  display_name: "Generate Ready Benchmark API (from ANCHOR)"
+  short_description: "Add ANCHOR inference-ready benchmark dataset classes"
+  default_prompt: "Use $generate-ready-benchmark-api to add or update an ANCHOR ready_datasets benchmark class that subclasses InferenceReadyDataset, fills the base initializer parameters, implements only the abstract methods, and places shared helpers in ready_datasets/common_utils.py."
+policy:
+  allow_implicit_invocation: true

@@ -184,7 +184,7 @@ Web HTTP/SSE    -&gt; session-kernel -&gt; scheduler -&gt; tools -&gt; rollout
 <tr><td><code>session-kernel</code></td><td><code>protocol</code>, <code>rollout</code>, <code>thread-store</code></td><td>Runtime core. Depends on traits for scheduler and tools.</td></tr>
 <tr><td><code>scheduler</code></td><td><code>session-kernel</code>, <code>protocol</code>, <code>openai-rs</code></td><td>Implements <code>session-kernel::Scheduler</code>.</td></tr>
 <tr><td><code>status</code></td><td><code>serde</code>, git subprocesses</td><td>Deterministic workspace status model. Independent from scheduler.</td></tr>
-<tr><td><code>pave-router</code></td><td><code>serde</code>, <code>status</code></td><td>Sparse PAVE vectors, agent profiles, task candidates, route scoring.</td></tr>
+<tr><td><code>pave-router</code></td><td><code>serde</code>, <code>status</code></td><td>Sparse PAVE vectors, generated agent identities, task candidates, route scoring.</td></tr>
 <tr><td><code>ui-bridge</code></td><td><code>protocol</code>, <code>status</code>, <code>pave-router</code></td><td>Surface-specific event/request shapes.</td></tr>
 <tr><td><code>lite-code</code> binary</td><td>all relevant crates</td><td>Composition root.</td></tr>
 </tbody></table>
@@ -198,8 +198,8 @@ Web HTTP/SSE    -&gt; session-kernel -&gt; scheduler -&gt; tools -&gt; rollout
 <li><code>tool_definitions_for_policy(...)</code> as the dynamic tool surface.</li>
 <li><code>SessionConfig</code> as the per-thread runtime configuration.</li>
 </ul>
-<p>The model endpoint is configured with <code>MARVIS_API_KEY</code> and <code>MARVIS_BASE_URL</code>. Missing <code>MARVIS_API_KEY</code> is a configuration error; the VSCode product does not fall back to a fake model.</p>
-<p>The VSCode autonomy path is also composed in the binary crate. The extension sends status ticks; <code>src/autonomy.rs</code> gates unchanged or non-actionable state, calls the OpenAI-compatible chat API for task segmentation, and routes tasks through <code>pave-router</code>. The result is a suggest-first decision, not automatic tool execution.</p>
+<p>The VSCode model endpoint is configured with <code>marvis.apiKey</code> and <code>marvis.baseUrl</code>. Missing <code>marvis.apiKey</code> is a configuration error; the VSCode product does not fall back to a fake model.</p>
+<p>The VSCode autonomy path is also composed in the binary crate. The extension sends status ticks; <code>src/autonomy.rs</code> gates unchanged, busy, ambiguous, or non-actionable state, calls the OpenAI-compatible chat API when status points to a focused next step, prompts the model to proactively infer user intent and select an auto-detected agent, and validates that route through <code>pave-router</code>. The result is a suggest-first decision, not automatic tool execution.</p>
 <p>Accepted suggestions are then capped to the routed profile approval. <code>src/skills.rs</code> loads real Codex-style skill packages, while <code>src/skill_mcp.rs</code> resolves the selected profile's skills and stdio MCP servers. Selected skill bodies are injected into the system prompt, and visible local tools/MCP tools are capped by the profile allowlist and the skill package's declared local tool dependencies. Stdio MCP startup requires shell approval because it launches a local process.</p>
 <h2 id="runtime-boundaries"><a class="header" href="#runtime-boundaries">Runtime Boundaries</a></h2>
 <h3 id="protocol-boundary"><a class="header" href="#protocol-boundary">Protocol Boundary</a></h3>

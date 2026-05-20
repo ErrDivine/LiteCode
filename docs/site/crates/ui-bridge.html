@@ -163,11 +163,11 @@
 </ul>
 <p><code>VscodeRequest</code> variants:</p>
 <div class="table-wrapper"><table><thead><tr><th>Variant</th><th>Payload</th></tr></thead><tbody>
-<tr><td><code>Initialize</code></td><td>workspace root, optional model, optional base URL, optional max tokens, agent profiles</td></tr>
+<tr><td><code>Initialize</code></td><td>workspace root, optional model, optional API key, optional base URL, optional thinking mode, optional reasoning effort, optional max tokens</td></tr>
 <tr><td><code>StatusUpdate</code></td><td><code>VscodeStatus</code></td></tr>
 <tr><td><code>CommandResult</code></td><td><code>CommandResult</code></td></tr>
 <tr><td><code>UserPrompt</code></td><td>prompt plus optional <code>VscodeStatus</code> and per-prompt approval grants</td></tr>
-<tr><td><code>AutonomyTick</code></td><td><code>VscodeStatus</code>, trigger, and optional current agent profiles</td></tr>
+<tr><td><code>AutonomyTick</code></td><td><code>VscodeStatus</code> and trigger. Legacy <code>agent_profiles</code> payloads are accepted but ignored by the runtime.</td></tr>
 <tr><td><code>RunSuggestedTask</code></td><td>suggestion id plus requested approval grants; runtime caps them to the stored route approval</td></tr>
 <tr><td><code>DismissSuggestion</code></td><td>suggestion id</td></tr>
 <tr><td><code>Shutdown</code></td><td>no payload</td></tr>
@@ -197,7 +197,7 @@
 <li><code>ShutdownComplete</code></li>
 </ul>
 <p>The <code>Ready</code> response includes workspace root, model, base URL, and initial status report.</p>
-<p><code>AutonomyDecision</code> is one of <code>idle</code>, <code>suggest</code>, or <code>suppressed</code>. A suggestion includes the selected route, task, agent profile, PAVE scores, and required approval flags.</p>
+<p><code>AutonomyDecision</code> is one of <code>idle</code>, <code>suggest</code>, or <code>suppressed</code>. A suggestion includes the selected route, task, agent profile, route explanation, and required approval flags.</p>
 <h2 id="vscode-runtime-events"><a class="header" href="#vscode-runtime-events">VSCode Runtime Events</a></h2>
 <p><code>VscodeRuntimeEvent</code> variants:</p>
 <ul>

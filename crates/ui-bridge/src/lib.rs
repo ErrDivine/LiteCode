@@ -19,7 +19,13 @@ pub enum VscodeRequest {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         model: Option<String>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
+        api_key: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
         base_url: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        thinking_mode: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        reasoning_effort: Option<String>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         max_tokens: Option<u32>,
         #[serde(default)]
@@ -109,7 +115,7 @@ pub enum VscodeResponse {
         process: ProcessSnapshot,
     },
     AutonomyDecision {
-        decision: AutonomyDecision,
+        decision: Box<AutonomyDecision>,
     },
     Complete {
         report: StatusReport,
@@ -329,6 +335,44 @@ mod tests {
     }
 
     #[test]
+    fn parses_initialize_request_with_api_key() {
+        let raw = r#"{
+            "id": 1,
+            "type": "initialize",
+            "workspace_root": "/workspace",
+            "model": "gpt-test",
+            "api_key": "sk-test",
+            "base_url": "https://example.test/v1",
+            "thinking_mode": "enabled",
+            "reasoning_effort": "high",
+            "max_tokens": 2048
+        }"#;
+        let parsed = serde_json::from_str::<VscodeRequestEnvelope>(raw).unwrap();
+        assert_eq!(parsed.id, 1);
+        match parsed.request {
+            VscodeRequest::Initialize {
+                workspace_root,
+                model,
+                api_key,
+                base_url,
+                thinking_mode,
+                reasoning_effort,
+                max_tokens,
+                ..
+            } => {
+                assert_eq!(workspace_root, "/workspace");
+                assert_eq!(model.as_deref(), Some("gpt-test"));
+                assert_eq!(api_key.as_deref(), Some("sk-test"));
+                assert_eq!(base_url.as_deref(), Some("https://example.test/v1"));
+                assert_eq!(thinking_mode.as_deref(), Some("enabled"));
+                assert_eq!(reasoning_effort.as_deref(), Some("high"));
+                assert_eq!(max_tokens, Some(2048));
+            }
+            other => panic!("unexpected request: {other:?}"),
+        }
+    }
+
+    #[test]
     fn parses_autonomy_tick_request() {
         let raw = r#"{
             "id": 7,
@@ -369,13 +413,13 @@ mod tests {
                 id: "task".to_string(),
                 title: "Fix diagnostic".to_string(),
                 prompt: "Fix it.".to_string(),
+                agent_id: Some("agent".to_string()),
                 evidence: vec!["diagnostic".to_string()],
                 files: Vec::new(),
                 risk_level: RiskLevel::Medium,
                 needs_write: true,
                 desired_tools: vec!["apply_patch".to_string()],
                 pave: PaveVector::new([("rust", 1.0)]),
-                confidence: 0.9,
             },
             agent: pave_router::AgentProfile {
                 id: "agent".to_string(),
@@ -395,7 +439,7 @@ mod tests {
         let response = VscodeResponseEnvelope::for_request(
             9,
             VscodeResponse::AutonomyDecision {
-                decision: AutonomyDecision::Suggest {
+                decision: Box::new(AutonomyDecision::Suggest {
                     suggestion: AutonomySuggestion {
                         suggestion_id: "task:agent".to_string(),
                         snapshot_hash: "hash".to_string(),
@@ -409,7 +453,7 @@ mod tests {
                             allow_network: false,
                         },
                     },
-                },
+                }),
             },
         );
         let value = serde_json::to_value(response).unwrap();

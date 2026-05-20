@@ -97,10 +97,38 @@
           "default": "gpt-4.1-mini",
           "description": "Model name passed to the Rust runtime."
         },
+        "marvis.apiKey": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "description": "API key for the OpenAI-compatible provider used by the VSCode runtime. Store this in User or Machine Settings, not committed workspace settings."
+        },
         "marvis.baseUrl": {
           "type": "string",
           "default": "",
           "description": "Optional OpenAI-compatible base URL. If empty, the Rust runtime uses MARVIS_BASE_URL or https://api.openai.com/v1."
+        },
+        "marvis.thinkingMode": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "disabled",
+            "enabled",
+            "provider_default"
+          ],
+          "default": "auto",
+          "description": "Thinking mode for compatible providers. auto disables DeepSeek thinking by default and omits the parameter for other providers."
+        },
+        "marvis.reasoningEffort": {
+          "type": "string",
+          "enum": [
+            "",
+            "low",
+            "medium",
+            "high"
+          ],
+          "default": "",
+          "description": "Optional reasoning effort sent to compatible providers when thinking is enabled or provider-default reasoning is requested."
         },
         "marvis.maxTokens": {
           "type": "number",
@@ -121,124 +149,6 @@
           "type": "number",
           "default": 30000,
           "description": "Low-frequency autonomous status check interval while the runtime is active."
-        },
-        "marvis.agentProfiles": {
-          "type": "array",
-          "default": [
-            {
-              "id": "rust-diagnostic-repair",
-              "label": "Rust Diagnostic Repair",
-              "skills": [
-                "rust-diagnostic-repair"
-              ],
-              "mcp_servers": [],
-              "skill_prompt": "You are a Rust repair agent. Focus on compiler diagnostics, failing tests, and small verified patches.",
-              "tool_allowlist": [
-                "read_file",
-                "read_many_files",
-                "search_files",
-                "find_files",
-                "list_directory",
-                "list_symbols",
-                "apply_patch",
-                "run_test",
-                "run_build",
-                "run_formatter",
-                "git_diff",
-                "git_status",
-                "list_skills",
-                "list_skill_resources",
-                "read_skill_resource"
-              ],
-              "pave": {
-                "rust": 1,
-                "diagnostics": 0.95,
-                "tests": 0.85,
-                "patch": 0.9,
-                "risk_medium": 0.5
-              },
-              "default_approval": {
-                "allow_workspace_write": true,
-                "allow_shell": true,
-                "allow_risky_shell": false,
-                "allow_git_write": false,
-                "allow_network": false
-              }
-            },
-            {
-              "id": "test-failure-triage",
-              "label": "Test Failure Triage",
-              "skills": [
-                "test-failure-triage"
-              ],
-              "mcp_servers": [],
-              "skill_prompt": "You are a test failure triage agent. Explain the failing behavior, inspect focused code, and suggest the smallest verification path.",
-              "tool_allowlist": [
-                "read_file",
-                "read_many_files",
-                "search_files",
-                "find_files",
-                "list_directory",
-                "list_symbols",
-                "run_test",
-                "git_diff",
-                "git_status",
-                "list_skills",
-                "list_skill_resources",
-                "read_skill_resource"
-              ],
-              "pave": {
-                "tests": 1,
-                "rust": 0.7,
-                "diagnostics": 0.45,
-                "explanation": 0.65,
-                "shell": 0.5
-              },
-              "default_approval": {
-                "allow_workspace_write": false,
-                "allow_shell": true,
-                "allow_risky_shell": false,
-                "allow_git_write": false,
-                "allow_network": false
-              }
-            },
-            {
-              "id": "repo-explainer",
-              "label": "Repo Explainer",
-              "skills": [
-                "repo-explainer"
-              ],
-              "mcp_servers": [],
-              "skill_prompt": "You are a repo explanation agent. Read only, summarize relationships, and avoid proposing edits unless the user asks.",
-              "tool_allowlist": [
-                "read_file",
-                "read_many_files",
-                "search_files",
-                "find_files",
-                "list_directory",
-                "list_symbols",
-                "git_diff",
-                "git_status",
-                "list_skills",
-                "list_skill_resources",
-                "read_skill_resource"
-              ],
-              "pave": {
-                "explanation": 1,
-                "docs": 0.65,
-                "rust": 0.35,
-                "risk_low": 0.6
-              },
-              "default_approval": {
-                "allow_workspace_write": false,
-                "allow_shell": false,
-                "allow_risky_shell": false,
-                "allow_git_write": false,
-                "allow_network": false
-              }
-            }
-          ],
-          "description": "Agent profiles used by autonomous PAVE routing. Profiles choose model names, skills, tool allowlists, and vectors; API credentials still come only from MARVIS_API_KEY and MARVIS_BASE_URL."
         }
       }
     },

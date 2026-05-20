@@ -293,7 +293,7 @@ class MarvisController {
       this.lastStatus = status;
       await this.client.request(
         'autonomy_tick',
-        { status, trigger, agent_profiles: this.agentProfiles() },
+        { status, trigger },
         ['autonomy_decision', 'error'],
         120000
       );
@@ -325,9 +325,8 @@ class MarvisController {
     const task = route.task || {};
     const agent = route.agent || {};
     const title = task.title || 'Marvis found a possible task';
-    const score = typeof route.final_score === 'number' ? route.final_score.toFixed(2) : 'n/a';
     const choice = await vscode.window.showInformationMessage(
-      `${title} (${agent.label || agent.id || 'agent'}, score ${score}, ${approvalLabel(suggestion.required_approval)})`,
+      `${title} (${agent.label || agent.id || 'agent'}, ${approvalLabel(suggestion.required_approval)})`,
       'Accept',
       'Dismiss'
     );
@@ -566,9 +565,11 @@ class MarvisController {
       {
         workspace_root: this.workspaceRoot(),
         model: config.get('model'),
+        api_key: String(config.get('apiKey') || '') || undefined,
         base_url: String(config.get('baseUrl') || '') || undefined,
-        max_tokens: config.get('maxTokens'),
-        agent_profiles: this.agentProfiles()
+        thinking_mode: String(config.get('thinkingMode') || 'auto'),
+        reasoning_effort: String(config.get('reasoningEffort') || '') || undefined,
+        max_tokens: config.get('maxTokens')
       },
       ['ready', 'error'],
       120000
@@ -793,15 +794,6 @@ class MarvisController {
     return Array.from(this.processes.values()).some((process) =>
       ['created', 'running_model_turn', 'running_tool_call'].includes(process.state)
     );
-  }
-
-  agentProfiles() {
-    const config = vscode.workspace.getConfiguration('marvis');
-    const raw = config.get('agentProfiles') || [];
-    if (!Array.isArray(raw)) {
-      return [];
-    }
-    return raw.map(normalizeAgentProfile).filter(Boolean);
   }
 
   async pickApproval(title) {
@@ -1180,63 +1172,6 @@ function riskyApproval() {
   };
 }
 
-function normalizeAgentProfile(raw) {
-  if (!raw || typeof raw !== 'object') {
-    return undefined;
-  }
-  const id = String(raw.id || '').trim();
-  const label = String(raw.label || id).trim();
-  const model = String(raw.model || vscode.workspace.getConfiguration('marvis').get('model') || '').trim();
-  const skillPrompt = String(raw.skill_prompt || raw.skillPrompt || '').trim();
-  const skills = Array.isArray(raw.skills) ? raw.skills.map(String).map((value) => value.trim()).filter(Boolean) : [];
-  const mcpServers = Array.isArray(raw.mcp_servers || raw.mcpServers)
-    ? (raw.mcp_servers || raw.mcpServers).map(String).map((value) => value.trim()).filter(Boolean)
-    : [];
-  if (!id || !label || !model || (!skillPrompt && skills.length === 0)) {
-    return undefined;
-  }
-  return {
-    id,
-    label,
-    model,
-    skills,
-    mcp_servers: mcpServers,
-    skill_prompt: skillPrompt,
-    tool_allowlist: Array.isArray(raw.tool_allowlist || raw.toolAllowlist)
-      ? (raw.tool_allowlist || raw.toolAllowlist).map(String)
-      : [],
-    pave: normalizePave(raw.pave),
-    default_approval: normalizeApproval(raw.default_approval || raw.defaultApproval)
-  };
-}
-
-function normalizePave(value) {
-  if (!value || typeof value !== 'object') {
-    return {};
-  }
-  const result = {};
-  for (const [key, raw] of Object.entries(value)) {
-    const number = Number(raw);
-    if (Number.isFinite(number)) {
-      result[key] = number;
-    }
-  }
-  return result;
-}
-
-function normalizeApproval(value) {
-  if (!value || typeof value !== 'object') {
-    return readOnlyApproval();
-  }
-  return {
-    allow_workspace_write: Boolean(value.allow_workspace_write),
-    allow_shell: Boolean(value.allow_shell),
-    allow_risky_shell: Boolean(value.allow_risky_shell),
-    allow_git_write: Boolean(value.allow_git_write),
-    allow_network: Boolean(value.allow_network)
-  };
-}
-
 function approvalLabel(approval) {
   const value = approval || readOnlyApproval();
   if (value.allow_risky_shell || value.allow_git_write || value.allow_network) {
@@ -1435,7 +1370,7 @@ function renderPanelHtml() {
         const files = (segment.files || []).slice(0, 4).join(', ');
         return '<div class="segment"><div><strong>' + escapeHtml(segment.kind) + '</strong></div>' +
           '<div>' + escapeHtml(segment.summary) + '</div>' +
-          '<div class="meta">risk=' + escapeHtml(segment.risk_level) + ' confidence=' + escapeHtml(segment.confidence) +
+          '<div class="meta">risk=' + escapeHtml(segment.risk_level) +
           ' files=' + escapeHtml(files || 'none') + '</div></div>';
       }).join('') || '<div class="meta">No active segments.</div>';
       if (state.suggestion) {
@@ -1446,7 +1381,7 @@ function renderPanelHtml() {
         suggestion.innerHTML = '<div><strong>' + escapeHtml(task.title || 'Suggested task') + '</strong></div>' +
           '<div>' + escapeHtml(task.prompt || '') + '</div>' +
           '<div class="meta">agent=' + escapeHtml(agent.label || agent.id || 'unknown') +
-          ' score=' + escapeHtml(route.final_score) + ' risk=' + escapeHtml(task.risk_level) +
+          ' risk=' + escapeHtml(task.risk_level) +
           ' approval=' + escapeHtml(approvalLabel(state.suggestion.required_approval)) + '</div>' +
           '<div class="meta">' + escapeHtml(evidence || 'No evidence listed.') + '</div>' +
           '<div style="display:flex;gap:6px;margin-top:8px">' +

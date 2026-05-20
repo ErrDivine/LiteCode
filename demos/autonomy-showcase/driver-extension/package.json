@@ -1,0 +1,50 @@
+{
+  "name": "marvis-autonomy-showcase-driver",
+  "displayName": "Marvis Autonomy Showcase Driver",
+  "description": "Timed VSCode workspace driver for recording the Marvis autonomous scheduler.",
+  "version": "0.1.0",
+  "publisher": "errdivine",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "activationEvents": [
+    "onStartupFinished",
+    "workspaceContains:.marvis-demo.json",
+    "onCommand:marvisDemo.run",
+    "onCommand:marvisDemo.reset"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "marvisDemo.run",
+        "title": "Run Autonomous Showcase",
+        "category": "Marvis Demo"
+      },
+      {
+        "command": "marvisDemo.reset",
+        "title": "Reset Workspace",
+        "category": "Marvis Demo"
+      }
+    ],
+    "configuration": {
+      "title": "Marvis Demo",
+      "properties": {
+        "marvisDemo.autoRun": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically run the autonomy showcase when the demo workspace opens."
+        },
+        "marvisDemo.stageDelayMs": {
+          "type": "number",
+          "default": 25000,
+          "description": "Delay after each trap so Marvis can wake up through debounce or heartbeat."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "check": "node --check extension.js"
+  }
+}

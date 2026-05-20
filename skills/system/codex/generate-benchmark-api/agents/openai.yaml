@@ -1,0 +1,26 @@
+capabilities:
+  - read_file
+  - read_many_files
+  - search_files
+  - find_files
+  - list_directory
+  - list_symbols
+  - write_file
+  - edit_file
+  - apply_patch
+  - run_test
+  - run_build
+  - run_formatter
+  - list_rollbacks
+  - restore_rollback
+  - git_diff
+  - git_status
+  - list_skills
+  - list_skill_resources
+  - read_skill_resource
+interface:
+  display_name: "Generate Benchmark API"
+  short_description: "Add LearnwareScaling benchmark dataset classes and port official benchmark evaluators"
+  default_prompt: "Use $generate-benchmark-api to add or update a LearnwareScaling benchmark dataset class under scaling/benchmark/dataset, including porting stable scoring or normalization logic from an official benchmark GitHub repo when one exists."
+policy:
+  allow_implicit_invocation: true

@@ -168,7 +168,7 @@
 <tr><td>Thread runtime</td><td><code>crates/session-kernel</code></td><td>Owns submissions, active turns, cancellation, history, event emission, and persistence integration.</td></tr>
 <tr><td>Scheduler</td><td><code>crates/scheduler</code></td><td>Converts thread state into model chat messages, streams deltas, executes tool calls, and returns final response items.</td></tr>
 <tr><td>UI bridge</td><td><code>crates/ui-bridge</code></td><td>Converts kernel events into CLI, web, and VSCode-facing formats.</td></tr>
-<tr><td>PAVE router</td><td><code>crates/pave-router</code></td><td>Scores LLM-segmented tasks against configured agent profiles.</td></tr>
+<tr><td>PAVE router</td><td><code>crates/pave-router</code></td><td>Scores LLM-segmented tasks against runtime-generated skill/toolset agent identities.</td></tr>
 </tbody></table>
 </div>
 <p>Everything else supports these contracts:</p>
@@ -197,7 +197,7 @@
 <li>Thread resume and fork basics.</li>
 <li>VSCode status ingestion.</li>
 <li>Autonomous VSCode wake-up checks with suggest-first PAVE routed tasks.</li>
-<li>OpenAI-compatible provider configuration through <code>MARVIS_API_KEY</code> and <code>MARVIS_BASE_URL</code>.</li>
+<li>OpenAI-compatible provider configuration through VSCode settings for the VSCode product and environment variables for CLI/web modes.</li>
 </ul>
 <p>Areas that are intentionally still simple:</p>
 <ul>
@@ -212,7 +212,7 @@
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                            <a rel="prev" href="../index.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                            <a rel="prev" href="../quick-start.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <i class="fa fa-angle-left"></i>
                             </a>
 
@@ -226,7 +226,7 @@
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                    <a rel="prev" href="../index.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                    <a rel="prev" href="../quick-start.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <i class="fa fa-angle-left"></i>
                     </a>
 

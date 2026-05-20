@@ -76,13 +76,13 @@ TurnRequest
   -> tool_spec_to_openai
   -> streaming chat/completions
   -> emit AgentMessageDelta events
-  -> accumulate tool call deltas
+  -> accumulate reasoning-content and tool call deltas
   -> execute each tool call
   -> append tool results to model messages
   -> repeat until no tool calls or finish_reason == stop
 ```
 
-Tool calls are persisted as `ResponseItem::FunctionCall` values followed by `ResponseItem::FunctionCallOutput` values. The scheduler still emits tool begin/end events for live UI, and later turns replay persisted tool-call history as valid assistant tool-call plus tool-result chat messages.
+Tool calls are persisted as `ResponseItem::FunctionCall` values followed by `ResponseItem::FunctionCallOutput` values. If a thinking-enabled provider returns `reasoning_content`, Marvis stores it on assistant messages; for tool-call assistant messages, it is attached to the first function call and restored during history replay. The scheduler still emits tool begin/end events for live UI, and later turns replay persisted tool-call history as valid assistant tool-call plus tool-result chat messages.
 
 ## Persistence Flow
 

@@ -153,7 +153,7 @@ This page is a compact lookup for public interfaces across the workspace.
 | Interface | Kind | Purpose |
 | --- | --- | --- |
 | `VscodeRequestEnvelope` | struct | Stdio request envelope. |
-| `VscodeRequest` | enum | Initialize, status update, command result, prompt, shutdown. |
+| `VscodeRequest` | enum | Initialize, status update, command result, prompt, autonomy tick, suggestion accept/dismiss, shutdown. Initialize carries model, API key, base URL, thinking mode, reasoning effort, and max tokens; agent identities are generated inside the runtime. |
 | `VscodeResponseEnvelope` | struct | Stdio response envelope. |
 | `VscodeResponse` | enum | Ready, status report, agent event, complete, error, shutdown complete. |
 | `VscodeRuntimeEvent` | enum | Surface event for VSCode. |

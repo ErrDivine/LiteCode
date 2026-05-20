@@ -154,20 +154,21 @@
                 <div id="content" class="content">
                     <main>
                         <h1 id="skill-and-mcp-runtime"><a class="header" href="#skill-and-mcp-runtime">Skill And MCP Runtime</a></h1>
-<p><code>src/skill_mcp.rs</code> resolves routed agent profiles, while <code>src/skills.rs</code> owns Codex-style skill package loading. Skills and tools are separate layers: skills are archived instruction packages, local tool functions and MCP tools are the execution layer.</p>
+<p><code>src/skill_mcp.rs</code> generates and resolves routed agent identities, while <code>src/skills.rs</code> owns Codex-style skill package loading. Skills and tools are separate layers: skills are archived instruction packages, local tool functions and MCP tools are the execution layer.</p>
 <h2 id="skills"><a class="header" href="#skills">Skills</a></h2>
 <p>The registry loads:</p>
 <ul>
-<li>bundled system skill packages: <code>rust-diagnostic-repair</code>, <code>test-failure-triage</code>, and <code>repo-explainer</code></li>
+<li>bundled system skill packages from <code>skills/system/**/SKILL.md</code>, including native Marvis skills, imported Anthropic skills, and imported local Codex workspace skills</li>
 <li>workspace skills under <code>.marvis/skills/**/SKILL.md</code></li>
 <li>Codex-compatible workspace skills under <code>.agents/skills/**/SKILL.md</code></li>
 </ul>
-<p>Bundled system skills are real packages with <code>SKILL.md</code>, <code>agents/openai.yaml</code>, <code>references/</code>, and <code>scripts/</code>. At runtime Marvis materializes them under <code>.lite-code/skills/.system</code> and loads them through the same package loader used for workspace skills.</p>
+<p>Bundled system skills are real packages with <code>SKILL.md</code>, optional <code>agents/openai.yaml</code>, and package resources. A build script generates a binary-safe catalog from <code>skills/system</code>, so text resources, scripts, images, fonts, PDFs, and archives can ship without a manual Rust manifest. At runtime Marvis materializes them under <code>.lite-code/skills/.system</code> and loads them through the same package loader used for workspace skills.</p>
 <p>Each <code>SKILL.md</code> must start with YAML-style frontmatter containing at least <code>name</code> and <code>description</code>. An optional <code>id</code> overrides the normalized skill id. Skill packages can include:</p>
 <ul>
-<li><code>references/</code>: read-only Markdown or text references</li>
+<li>any non-hidden package files as resources, excluding <code>SKILL.md</code> and <code>agents/openai.{yaml,json}</code> metadata</li>
 <li><code>scripts/</code>: script utilities that can run only when risky-shell approval is present</li>
-<li><code>assets/</code>: package assets such as icons or templates</li>
+<li><code>assets/</code>, fonts, images, PDFs, and archives as asset resources</li>
+<li><code>references/</code>, <code>reference/</code>, <code>examples/</code>, <code>templates/</code>, <code>themes/</code>, root Markdown guides, and similar files as reference resources</li>
 </ul>
 <p>Optional metadata can live at <code>agents/openai.json</code> or <code>agents/openai.yaml</code> next to the skill file. Marvis reads:</p>
 <ul>
@@ -175,7 +176,8 @@
 <li><code>dependencies.tools</code> entries with <code>type: mcp</code>, <code>value</code>, <code>transport: stdio</code>, <code>command</code>, and optional <code>args</code></li>
 <li>legacy <code>capabilities</code> as local tool dependencies</li>
 </ul>
-<p>Agent profiles name skills through <code>skills: ["skill-id"]</code>. The active local tool list is capped by both the agent profile allowlist and the selected skill's local tool dependencies. Selected skill bodies are injected into the system prompt, and equipped agents can use <code>list_skills</code>, <code>list_skill_resources</code>, and <code>read_skill_resource</code> to inspect package resources.</p>
+<p>Each implicitly invokable skill becomes a same-model agent identity. The generated agent id is the skill id, the label comes from skill interface metadata when present, and the tool allowlist comes from declared local tool dependencies. Imported bundled skills include <code>agents/openai.yaml</code> metadata so they register as useful agents instead of read-only placeholders. Skills without explicit tool metadata still receive a read-only inspection toolset. Marvis also generates built-in toolset agents for read-only inspection, verification, and focused workspace patches.</p>
+<p>The active local tool list is capped by runtime approval and the generated agent tool allowlist. Selected skill bodies are injected into the system prompt, and equipped agents can use <code>list_skills</code>, <code>list_skill_resources</code>, and <code>read_skill_resource</code> to inspect package resources. A skill can set <code>policy.allow_implicit_invocation: false</code> in <code>agents/openai.yaml</code> or <code>agents/openai.json</code> to stay available for explicit future use without becoming an autonomous routing target.</p>
 <h2 id="mcp"><a class="header" href="#mcp">MCP</a></h2>
 <p>The MCP runtime reads stdio server config from <code>.marvis/mcp.json</code> and <code>.mcp.json</code>.</p>
 <pre><code class="language-json">{
